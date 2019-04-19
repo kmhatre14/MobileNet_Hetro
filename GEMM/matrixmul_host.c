@@ -16,12 +16,17 @@
 #define W 160
 #define K_D 3
 ////////////////////////////////////////////////////////////////////////////////
+/*Function Prototype*/
 int decode_image(char* frame, char filename[]);
 void seperateChannels(unsigned char* imd,unsigned char* im1,unsigned char* im2,unsigned char* im3); 
 int im2col_cpu(unsigned char* data_im, int channels, int height, int width, int ksize, int stride, int pad, unsigned char* data_col);
 unsigned char im2col_get_pixel(unsigned char *im, int height, int width, int channels, int row, int col, int channel, int pad);
 double kernelExecTimeNs;
 void readSquezeNetKernel(int *m);
+long LoadOpenCLKernel(char const* path, char **buf);
+int openCldeviceConfig( void );
+int openCLContextConfig( void );
+
 /*Cl device Variables */
 int err;                            // error code returned from api calls
 cl_device_id device_id;             // compute device id 
@@ -34,39 +39,49 @@ cl_ulong start;
 cl_ulong end;
 cl_uint dev_cnt = 0;
 cl_platform_id platform_ids[100];
+
 // OpenCL device memory for matrices
 cl_mem d_image;
 cl_mem d_filter;
 cl_mem d_C;
 char *KernelSource;
 long lFileSize;
+
 /*Application variables*/
 int imgcount = 0;
 char count_buff[5];
 char filebuff[50];
 int colSize;
+unsigned int mem_size_C;
+unsigned int mem_size_op_im2col;
+unsigned char* h_op_im2col;
+unsigned int mem_size_filter;
+unsigned int mem_size_image;
+int* h_filter;
+unsigned int size_image;
+unsigned char* h_image;
+unsigned int size_filter;
+unsigned int size_op_im2col;
+
 int main(int argc, char** argv)
 {
-
-
     // set seed for rand()
     srand(2014);
-
-    
+   
     //Allocate host memory for image with 3 channels
-    unsigned int size_image = W * H * K_D;
-    unsigned int mem_size_image = sizeof(unsigned char) * size_image;
-    unsigned char* h_image = (unsigned char*) malloc(mem_size_image);
+    size_image = W * H * K_D;
+    mem_size_image = sizeof(unsigned char) * size_image;
+    h_image = (unsigned char*) malloc(mem_size_image);
 
     //Allocate host memory for filter
-    unsigned int size_filter = K_D * K_D*96*3;
-    unsigned int mem_size_filter = sizeof(int) * size_filter;
-    int* h_filter = (int*) malloc(mem_size_filter);
+    size_filter = K_D * K_D*96*3;
+    mem_size_filter = sizeof(int) * size_filter;
+    h_filter = (int*) malloc(mem_size_filter);
 
     //Allocate host memory for filter
-    unsigned int size_op_im2col = K_D*K_D*(H)*(W)*3;
-    unsigned int mem_size_op_im2col = sizeof(unsigned char) * size_op_im2col;
-    unsigned char* h_op_im2col = (unsigned char*) malloc(mem_size_op_im2col);      
+    size_op_im2col = K_D*K_D*(H)*(W)*3;
+    mem_size_op_im2col = sizeof(unsigned char) * size_op_im2col;
+    h_op_im2col = (unsigned char*) malloc(mem_size_op_im2col);      
     
     openCldeviceConfig();
 
@@ -95,7 +110,7 @@ int main(int argc, char** argv)
 
     //Allocate host memory for the result C
     unsigned int size_C = H * W * 3 * 96;
-    unsigned int mem_size_C = sizeof(unsigned char) * size_C;
+    mem_size_C = sizeof(unsigned char) * size_C;
     unsigned char* h_C = (unsigned char*) malloc(mem_size_C);
 
     openCLContextConfig();
@@ -241,7 +256,7 @@ void readSquezeNetKernel(int *m)
    fclose(fp);
 }
 
-void openCldeviceConfig( void )
+int openCldeviceConfig( void )
 {
     clGetPlatformIDs(0, 0, &dev_cnt);
 
@@ -267,7 +282,7 @@ void openCldeviceConfig( void )
 
 }
 
-void openCLContextConfig( void )
+int openCLContextConfig( void )
 {
  // Create a command commands
     commands = clCreateCommandQueue(context, device_id, CL_QUEUE_PROFILING_ENABLE, &err);

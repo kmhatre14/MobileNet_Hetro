@@ -5,7 +5,7 @@
 #PBS -l walltime=00:01:00
 module load cuda/9.2
 CUR_DIR=$(pwd)
-cd $CUR_DIR/Hetro/Project/GEMM
+cd $CUR_DIR/Hetro/Project/MobileNet_Hetro/GEMM
 hostname=`hostname -s`
 echo "Hostname : " $hostname
 if [ ! -e hello ]; then
