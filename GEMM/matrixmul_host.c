@@ -9,8 +9,8 @@
 #include <CL/cl.h>
 #include <stdbool.h>
 
-#define W 160
-#define H 120
+#define W 224
+#define H 224
 #define K_D 3
 #define CHANNELS 3
 
@@ -96,16 +96,8 @@ int main(int argc, char** argv)
     printf("Initializing OpenCL device...\n");
  
 
-    snprintf(count_buff, sizeof(count_buff), "%d", imgcount );
-    strcpy(filebuff, "data/viptraffic");
-    strcat(filebuff, count_buff);
-    strcat(filebuff, ".ppm");
-    printf("Iterator: %d \n", imgcount);
-    imgcount++;
-    printf("%s \n", filebuff);  
 
-    printf("Reading host image\n");
-    decode_image(h_image,filebuff);
+    decode_image(h_image,"data/dog.ppm");
     printf("Reading host image..Done\n");
     int i,j;   
 
