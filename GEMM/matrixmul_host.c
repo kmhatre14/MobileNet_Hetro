@@ -121,7 +121,7 @@ int main(int argc, char** argv)
     }
     printf("im2col output \n");
 
-    im2col_cpu(h_imStitchChannel,3,H,W,K_D,1,0,h_op_im2col);
+    im2col_cpu(h_imStitchChannel,3,H,W,K_D,2,1,h_op_im2col);
     printf("Input Image Dim H %d \t W %d \t K_D %d\n",H,W,K_D);
     printf("im2Col Image Dim H %d \t W %d \n",dG_h,dG_w);
     printf("im2Col Matrix Dim H %d \t W %d \n",(K_D*K_D*CHANNELS),(dG_h*dG_w));
