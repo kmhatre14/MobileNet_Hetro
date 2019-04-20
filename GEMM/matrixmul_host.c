@@ -1,5 +1,3 @@
-////////////////////////////////////////////////////////////////////////////////
-
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,15 +9,17 @@
 #include <CL/cl.h>
 #include <stdbool.h>
 
-////////////////////////////////////////////////////////////////////////////////
-#define H 120
 #define W 160
+#define H 120
 #define K_D 3
-////////////////////////////////////////////////////////////////////////////////
+#define CHANNELS 3
+
 /*Function Prototype*/
-int decode_image(char* frame, char filename[]);
-void seperateChannels(unsigned char* imd,unsigned char* im1,unsigned char* im2,unsigned char* im3); 
-int im2col_cpu(unsigned char* data_im, int channels, int height, int width, int ksize, int stride, int pad, unsigned char* data_col);
+int decode_image(unsigned char* frame, char filename[]);
+void stitchChannels(unsigned char* imd,unsigned char* imOut);
+void im2col_cpu(unsigned char* data_im,
+     int channels,  int height,  int width,
+     int ksize,  int stride, int pad, unsigned char* data_col);
 unsigned char im2col_get_pixel(unsigned char *im, int height, int width, int channels, int row, int col, int channel, int pad);
 double kernelExecTimeNs;
 void readSquezeNetKernel(int *m);
@@ -46,6 +46,7 @@ cl_mem d_filter;
 cl_mem d_C;
 char *KernelSource;
 long lFileSize;
+size_t localWorkSize[2], globalWorkSize[2];
 
 /*Application variables*/
 int imgcount = 0;
@@ -57,11 +58,15 @@ unsigned int mem_size_op_im2col;
 unsigned char* h_op_im2col;
 unsigned int mem_size_filter;
 unsigned int mem_size_image;
-int* h_filter;
+unsigned char* h_filter;
 unsigned int size_image;
 unsigned char* h_image;
 unsigned int size_filter;
 unsigned int size_op_im2col;
+int dG_h,dG_w;
+unsigned char* h_imStitchChannel;
+unsigned int size_C;
+unsigned char* h_C;
 
 int main(int argc, char** argv)
 {
@@ -73,13 +78,16 @@ int main(int argc, char** argv)
     mem_size_image = sizeof(unsigned char) * size_image;
     h_image = (unsigned char*) malloc(mem_size_image);
 
+    //Stitch the image such that CH1 CH2 CH3 in series
+    h_imStitchChannel = (unsigned char*) malloc(mem_size_image);
+    
     //Allocate host memory for filter
-    size_filter = K_D * K_D*96*3;
-    mem_size_filter = sizeof(int) * size_filter;
-    h_filter = (int*) malloc(mem_size_filter);
+    size_filter = K_D * K_D * CHANNELS;
+    mem_size_filter = sizeof(unsigned char) * size_filter;
+    h_filter = (unsigned char*)malloc(mem_size_filter);
 
-    //Allocate host memory for filter
-    size_op_im2col = K_D*K_D*(H)*(W)*3;
+    //Allocate host memory for im2col matrix
+    size_op_im2col = K_D*K_D*H*W*CHANNELS;
     mem_size_op_im2col = sizeof(unsigned char) * size_op_im2col;
     h_op_im2col = (unsigned char*) malloc(mem_size_op_im2col);      
     
@@ -101,24 +109,46 @@ int main(int argc, char** argv)
     printf("Reading host image..Done\n");
     int i,j;   
 
-    //Initialize host memory
-    readSquezeNetKernel(h_filter);
+    //Set filter element 0 to 1
+    //readSquezeNetKernel(h_filter);
+    h_filter[0] = 1;
 
+    stitchChannels(h_image,h_imStitchChannel);
 
-    colSize = im2col_cpu(h_image,1,H,W*3,K_D,2,0,h_op_im2col);
-    printf("ColSize %d \n",colSize);
+    for(i=0;i<5;i++)
+    {
+        for(j=0;j<5;j++)
+        { 
+           printf("%d \t" , h_imStitchChannel[i*W*CHANNELS+j]);
+        }
+        printf("\n");
+    }
+    printf("im2col output \n");
+
+    im2col_cpu(h_imStitchChannel,3,H,W,K_D,1,0,h_op_im2col);
+    printf("Input Image Dim H %d \t W %d \t K_D %d\n",H,W,K_D);
+    printf("im2Col Image Dim H %d \t W %d \n",dG_h,dG_w);
+    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D*K_D*CHANNELS),(dG_h*dG_w));
+    for(i=0;i<27;i++)
+    {
+        for(j=0;j<9;j++)
+        { 
+            printf("%d \t" , h_op_im2col[i*dG_h*dG_w + j]);
+        }
+        printf("\n");
+    }
 
     //Allocate host memory for the result C
-    unsigned int size_C = H * W * 3 * 96;
+    size_C = dG_h * dG_w;
     mem_size_C = sizeof(unsigned char) * size_C;
-    unsigned char* h_C = (unsigned char*) malloc(mem_size_C);
+    h_C = (unsigned char*) malloc(mem_size_C);
 
     openCLContextConfig();
 
-    printf("Running matrix multiplication for matrices A (%dx%d) and B (%dx%d) ...\n", H,W,K_D,K_D); 
+    printf("Running matrix multiplication for matrices im2Col_Matrix (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D*K_D*CHANNELS),(dG_h*dG_w),1,(K_D*K_D*CHANNELS)); 
 
     //Launch OpenCL kernel
-    size_t localWorkSize[2], globalWorkSize[2];
+
     int wK = K_D;
     int wH = H;
     int wW = W;
@@ -185,7 +215,7 @@ int main(int argc, char** argv)
     return 0;
 }
 
-int decode_image(char* frame, char filename[]) {
+int decode_image(unsigned char* frame, char filename[]) {
     FILE *pFile;
     pFile = fopen(filename, "r");
     if(pFile == NULL){
@@ -205,14 +235,15 @@ void seperateChannels(unsigned char* imd,unsigned char* im1,unsigned char* im2,u
         im3[i] = imd[j+2];                
     }
 }
-int im2col_cpu(unsigned char* data_im,
+void im2col_cpu(unsigned char* data_im,
      int channels,  int height,  int width,
      int ksize,  int stride, int pad, unsigned char* data_col) 
 {
     int c,h,w;
     int height_col = (height + 2*pad - ksize) / stride + 1;
     int width_col = (width + 2*pad - ksize) / stride + 1;
-    int col_index;
+    dG_h = height_col;
+    dG_w = width_col;
     int channels_col = channels * ksize * ksize;
     for (c = 0; c < channels_col; ++c) {
         int w_offset = c % ksize;
@@ -222,14 +253,14 @@ int im2col_cpu(unsigned char* data_im,
             for (w = 0; w < width_col; ++w) {
                 int im_row = h_offset + h * stride;
                 int im_col = w_offset + w * stride;
-                col_index = (c * height_col + h) * width_col + w;
-                data_col[col_index] = im2col_get_pixel(data_im, height, width, channels, im_row, im_col, c_im, pad);
+                int col_index = (c * height_col + h) * width_col + w;
+                data_col[col_index] = im2col_get_pixel(data_im, height, width, channels,
+                        im_row, im_col, c_im, pad);
             }
         }
-
     }
-    return col_index;
-}
+} 
+
 unsigned char im2col_get_pixel(unsigned char *im, int height, int width, int channels, int row, int col, int channel, int pad)
 {
     row -= pad;
@@ -284,7 +315,7 @@ int openCldeviceConfig( void )
 
 int openCLContextConfig( void )
 {
- // Create a command commands
+    // Create a command commands
     commands = clCreateCommandQueue(context, device_id, CL_QUEUE_PROFILING_ENABLE, &err);
     if (!commands)
     {
@@ -402,4 +433,15 @@ long LoadOpenCLKernel(char const* path, char **buf)
     /* Return the file size */
     return (long)fsz;
 }
+
+void stitchChannels(unsigned char* imd,unsigned char* imOut)
+{
+    int i,j;    
+    for(i=0,j=0; i<H*W; i++,j+=3){
+        imOut[i] = imd[j];
+        imOut[i+(H*W)] = imd[j+1];
+        imOut[i+(H*W*2)] = imd[j+2];                
+    }
+}
+
 
