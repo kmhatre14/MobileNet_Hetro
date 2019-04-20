@@ -111,7 +111,11 @@ int main(int argc, char** argv)
 
     //Set filter element 0 to 1
     //readSquezeNetKernel(h_filter);
-    h_filter[0] = 1;
+    for(i=0;i<27;i++)
+    {
+        h_filter[i] = 1;    
+    }
+    
 
     stitchChannels(h_image,h_imStitchChannel);
 
@@ -148,19 +152,17 @@ int main(int argc, char** argv)
     printf("Running matrix multiplication for matrices im2Col_Matrix (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D*K_D*CHANNELS),(dG_h*dG_w),1,(K_D*K_D*CHANNELS)); 
 
     //Launch OpenCL kernel
-
-    int wK = K_D;
-    int wH = H;
-    int wW = W;
-    int wK_H = 96;
+    int argK = K_D;
+    int argH = dG_h;
+    int argW = dG_w;
+    int argChannel = CHANNELS;
     err = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&d_C);
     err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&d_image);
     err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&d_filter);
-    err |= clSetKernelArg(kernel, 3, sizeof(int), (void *)&wK);
-    err |= clSetKernelArg(kernel, 4, sizeof(int), (void *)&wH);
-    err |= clSetKernelArg(kernel, 5, sizeof(int), (void *)&wW);
-    err |= clSetKernelArg(kernel, 6, sizeof(int), (void *)&wK_H);
-
+    err |= clSetKernelArg(kernel, 3, sizeof(int), (void *)&argK);
+    err |= clSetKernelArg(kernel, 4, sizeof(int), (void *)&argH);
+    err |= clSetKernelArg(kernel, 5, sizeof(int), (void *)&argW);
+    err |= clSetKernelArg(kernel, 6, sizeof(int), (void *)&argChannel);
 
     if (err != CL_SUCCESS)
     {
@@ -168,10 +170,10 @@ int main(int argc, char** argv)
         exit(1);
     }
     //set the local and globar work group size 
-    localWorkSize[0] = 8;
-    localWorkSize[1] = 9;
-    globalWorkSize[0] = 96*3;
-    globalWorkSize[1] = 13509;//H*W*3;
+    localWorkSize[0] = 2;
+    localWorkSize[1] = 2;
+    globalWorkSize[0] = dG_w;
+    globalWorkSize[1] = dG_h;
 
     err = clEnqueueNDRangeKernel(commands, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &myevent);
     clFinish(commands);
@@ -196,7 +198,15 @@ int main(int argc, char** argv)
     }
 
     printf("Matrix multiplication completed...\n"); 
-
+    for(i=0;i<5;i++)
+    {
+        for(j=0;j<5;j++)
+        { 
+           printf("%d \t" , h_C[i*dG_w+j]);
+        }
+        printf("\n");
+    }
+    printf("last value %d \n" , h_C[(dG_w*dG_h)-1]);
     //Shutdown and cleanup
     free(h_image);
     free(h_filter);
