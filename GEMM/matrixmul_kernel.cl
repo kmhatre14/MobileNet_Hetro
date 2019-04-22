@@ -24,6 +24,12 @@ matrixMul(__global unsigned char* C,
         //       printf("%d %d \n",elementA,elementB);
         //   }
     }
+    //Considering 128 as a threshould for 0
+    value = value/(K_D*K_D*channel);   
+    if(value < 128)
+    {
+        value = 0;
+    }
     //write back the answer
-    C[ty*W+tx] = value/(K_D*K_D*channel);
+    C[ty*W+tx] = value;
 }

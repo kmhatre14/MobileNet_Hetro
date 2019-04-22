@@ -32,7 +32,8 @@ long LoadOpenCLKernel(char const* path, char **buf);
 int openCldeviceConfig( void );
 int openCLContextConfig( void );
 void Layer1( void );
-
+void Layer2Depthwise( void );
+void Layer2Pointhwise( void );
 /*Cl device Variables */
 int err;                            // error code returned from api calls
 cl_device_id device_id;             // compute device id 
@@ -78,6 +79,22 @@ unsigned int size_l1_out;
 unsigned int mem_size_l1_out;
 unsigned char* h_l1_out;
 
+unsigned int size_l1_im2col;
+unsigned int mem_size_l1_im2col;
+unsigned char* h_l1_im2col;
+
+unsigned int size_op_l1;
+unsigned int mem_size_op_l1;
+unsigned char* h_op_l1;
+
+unsigned int size_filter_l1_d;
+unsigned int mem_size_filter_l1_d;
+unsigned char* h_filter_l1_d;
+//Data for OP of Depthwise Layer
+unsigned int size_l2_out;
+unsigned int mem_size_l2_out;
+unsigned char* h_l2_out;
+
 int main(int argc, char** argv)
 {
     // set seed for rand()
@@ -102,9 +119,19 @@ int main(int argc, char** argv)
     h_op_im2col = (unsigned char*) malloc(mem_size_op_im2col);      
     
     //Allocate host memory op of 1st layer
-    size_l1_out = K_D_1*K_D_1*H_1*W_1*CHANNELS_1;
+    size_l1_out = H_1*W_1*CHANNELS_1;
     mem_size_l1_out = sizeof(unsigned char) * size_l1_out;
     h_l1_out = (unsigned char*) malloc(mem_size_l1_out);      
+        
+    //Allocate host memory op of Depthewise2 layer
+    size_l2_out = H_1*W_1*CHANNELS_1;
+    mem_size_l2_out = sizeof(unsigned char) * size_l2_out;
+    h_l2_out = (unsigned char*) malloc(mem_size_l2_out);      
+    
+    //Allocate host memory op of 1st layer im2col
+    size_l1_im2col = K_D_1*K_D_1*H_1*W_1;
+    mem_size_l1_im2col = sizeof(unsigned char) * size_l1_im2col;
+    h_l1_im2col = (unsigned char*) malloc(mem_size_l1_im2col);      
     
     openCldeviceConfig();
 
@@ -159,10 +186,10 @@ int main(int argc, char** argv)
     printf("Running matrix multiplication for matrices im2Col_Matrix (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D*K_D*CHANNELS),(dG_h*dG_w),1,(K_D*K_D*CHANNELS)); 
 
     
-    /*****************************Layer 1 : Convolution*************************************/
+    /*Layer 1 : Convolution*/
     Layer1();
-    /*****************************Layer 2 : Depthwise Convolution*************************************/
-
+    /*Layer 2 : Depthwise Convolution*/
+    Layer2Depthwise();
     //Shutdown and cleanup
     free(h_image);
     free(h_filter);
@@ -400,7 +427,7 @@ void stitchChannels(unsigned char* imd,unsigned char* imOut)
 
 void Layer1( void )
 {
-    int itr,i,j;
+    int itr,i,j,jf=0;
     for(itr=0; itr<32 ; itr++)
     {
         printf("Itteration %d \n",itr);
@@ -460,28 +487,155 @@ void Layer1( void )
         clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL);
         kernelExecTimeNs += end-start;
 
-        //kernelExecTimeNs += kernelExecTimeNs; 
         printf("time in nanossec %0.3f \n", kernelExecTimeNs);
         //Retrieve result from device
         err = clEnqueueReadBuffer(commands, d_C, CL_TRUE, 0, mem_size_C, h_C, 0, NULL, NULL);
         clFinish(commands);
+        for(i=0; i<mem_size_C; i++,jf++)
+        {    
+            h_l1_out[jf] = h_C[i];
+        }
+        if (err != CL_SUCCESS)
+        {
+            printf("Error: Failed to read output array! %d\n", err);
+            exit(1);
+        }
+
+        printf("Matrix multiplication completed...\n"); 
+        
+        for(i=0;i<5;i++)
+        {
+            for(j=0;j<5;j++)
+            { 
+               //printf("%d \t" , h_C[i*dG_w+j]);
+            }
+            //printf("\n");
+        }
+        printf("last value %d \n" , h_C[(dG_w*dG_h)-1]);
+    }
+
+}
+void Layer2Depthwise( void )
+{
+    int i,j,jf,itr;
+
+    //Allocate host memory for filter
+    size_filter_l1_d = K_D_1 * K_D_1;
+    mem_size_filter_l1_d = sizeof(unsigned char) * size_filter_l1_d;
+    h_filter_l1_d = (unsigned char*)malloc(mem_size_filter_l1_d);
+
+    //get input for previous layer 
+    h_l1_out;
+    for(itr=0; itr<32; itr++)
+    {
+        //Convert each chhannel from input to im2col
+        im2col_cpu(h_l1_out,1,H_1,W_1,K_D_1,1,1,h_l1_im2col);
+
+        printf("Feature Map Dim H_1 %d \t W_1 %d \t K_D_1 %d\n",H_1,W_1,K_D_1);
+        printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+        printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_1*K_D_1),(dG_h*dG_w));
+        /*
+        for(i=0;i<9;i++)
+        {
+            for(j=0;j<9;j++)
+            { 
+                printf("%d \t" , h_l1_im2col[i*dG_h*dG_w + j]);
+            }
+            printf("\n");
+        }*/
+
+        //Allocate host memory for the result C
+        size_op_l1 = dG_h * dG_w;
+        mem_size_op_l1 = sizeof(unsigned char) * size_op_l1;
+        h_op_l1 = (unsigned char*) malloc(mem_size_op_l1);
+        printf("Running GEMM Layer2Depth (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_1*K_D_1),(dG_h*dG_w),1,(K_D_1*K_D_1)); 
+
+        //Create the Filter for 3x3 convolution 
+        h_filter_l1_d[0]=1;
+
+        //Call the kernel with the following matrix 
+        //Create the input and output arrays in device memory for our calculation
+        d_C = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_op_l1, NULL, &err);
+        d_image = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_l1_im2col, h_l1_im2col, &err);
+        d_filter = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_filter_l1_d, h_filter_l1_d, &err);
+
+        if (!d_image || !d_filter || !d_C)
+        {
+            printf("Error: Failed to allocate device memory!\n");
+            exit(1);
+        }    
+        //Launch OpenCL kernel
+        int argK = K_D_1;
+        int argH = dG_h;
+        int argW = dG_w;
+        int argChannel = 1;
+        err = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&d_C);
+        err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&d_image);
+        err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&d_filter);
+        err |= clSetKernelArg(kernel, 3, sizeof(int), (void *)&argK);
+        err |= clSetKernelArg(kernel, 4, sizeof(int), (void *)&argH);
+        err |= clSetKernelArg(kernel, 5, sizeof(int), (void *)&argW);
+        err |= clSetKernelArg(kernel, 6, sizeof(int), (void *)&argChannel);
 
         if (err != CL_SUCCESS)
         {
-        printf("Error: Failed to read output array! %d\n", err);
-        exit(1);
+            printf("Error: Failed to set kernel arguments! %d\n", err);
+            exit(1);
         }
+        //set the local and globar work group size 
+        localWorkSize[0] = 2;
+        localWorkSize[1] = 2;
+        globalWorkSize[0] = dG_w;
+        globalWorkSize[1] = dG_h;
 
+        err = clEnqueueNDRangeKernel(commands, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &myevent);
+        clFinish(commands);
+        if (err != CL_SUCCESS)
+        {
+            printf("Error: Failed to execute kernel! %d\n", err);
+            exit(1);
+        }
+        clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+        clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL);
+        kernelExecTimeNs += end-start;
+
+        printf("time in nanossec %0.3f \n", kernelExecTimeNs);
+        //Retrieve result from device
+        err = clEnqueueReadBuffer(commands, d_C, CL_TRUE, 0, mem_size_op_l1, h_C, 0, NULL, NULL);
+        clFinish(commands);
+
+        if (err != CL_SUCCESS)
+        {
+            printf("Error: Failed to read output array! %d\n", err);
+            exit(1);
+        }
+        for(i=0; i<mem_size_op_l1; i++,jf++)
+        {    
+            h_l2_out[jf] = h_C[i];
+        }
         printf("Matrix multiplication completed...\n"); 
         for(i=0;i<5;i++)
         {
             for(j=0;j<5;j++)
             { 
-               printf("%d \t" , h_C[i*dG_w+j]);
+               //printf("%d \t" , h_C[i*dG_w+j]);
             }
-            printf("\n");
+            //printf("\n");
         }
-        printf("last value %d \n" , h_C[(dG_w*dG_h)-1]);
+        printf("Depthwise Layer done %d\n",itr);
     }
+    //Store the data from each convolution to an array
+}
 
+void Layer2Pointhwise( void )
+{
+    //get input for previous layer 
+
+    //Convert each chhannel from input to im2col
+
+    //Create the Filter for 3x3 convolution 
+
+    //Call the kernel with the following matrix 
+
+    //Store the data from each convolution to an array
 }
