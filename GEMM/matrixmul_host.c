@@ -14,7 +14,11 @@
 #define H 224
 #define K_D 3
 #define CHANNELS 3
-
+//Data for OP of 1st Layer
+#define W_1 112
+#define H_1 112
+#define K_D_1 3
+#define CHANNELS_1 32
 /*Function Prototype*/
 int decode_image(unsigned char* frame, char filename[]);
 void stitchChannels(unsigned char* imd,unsigned char* imOut);
@@ -27,6 +31,7 @@ void readSquezeNetKernel(int *m);
 long LoadOpenCLKernel(char const* path, char **buf);
 int openCldeviceConfig( void );
 int openCLContextConfig( void );
+void Layer1( void );
 
 /*Cl device Variables */
 int err;                            // error code returned from api calls
@@ -68,6 +73,10 @@ int dG_h,dG_w;
 unsigned char* h_imStitchChannel;
 unsigned int size_C;
 unsigned char* h_C;
+//Data for OP of 1st Layer
+unsigned int size_l1_out;
+unsigned int mem_size_l1_out;
+unsigned char* h_l1_out;
 
 int main(int argc, char** argv)
 {
@@ -92,6 +101,11 @@ int main(int argc, char** argv)
     mem_size_op_im2col = sizeof(unsigned char) * size_op_im2col;
     h_op_im2col = (unsigned char*) malloc(mem_size_op_im2col);      
     
+    //Allocate host memory op of 1st layer
+    size_l1_out = K_D_1*K_D_1*H_1*W_1*CHANNELS_1;
+    mem_size_l1_out = sizeof(unsigned char) * size_l1_out;
+    h_l1_out = (unsigned char*) malloc(mem_size_l1_out);      
+    
     openCldeviceConfig();
 
     printf("Initializing OpenCL device...\n");
@@ -104,10 +118,10 @@ int main(int argc, char** argv)
 
     //Set filter element 0 to 1
     //readSquezeNetKernel(h_filter);
-    for(i=0;i<27;i++)
+/*    for(i=0;i<27;i++)
     {
         h_filter[i] = 1;    
-    }
+    }*/
     
 
     stitchChannels(h_image,h_imStitchChannel);
@@ -144,62 +158,11 @@ int main(int argc, char** argv)
 
     printf("Running matrix multiplication for matrices im2Col_Matrix (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D*K_D*CHANNELS),(dG_h*dG_w),1,(K_D*K_D*CHANNELS)); 
 
-    //Launch OpenCL kernel
-    int argK = K_D;
-    int argH = dG_h;
-    int argW = dG_w;
-    int argChannel = CHANNELS;
-    err = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&d_C);
-    err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&d_image);
-    err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&d_filter);
-    err |= clSetKernelArg(kernel, 3, sizeof(int), (void *)&argK);
-    err |= clSetKernelArg(kernel, 4, sizeof(int), (void *)&argH);
-    err |= clSetKernelArg(kernel, 5, sizeof(int), (void *)&argW);
-    err |= clSetKernelArg(kernel, 6, sizeof(int), (void *)&argChannel);
+    
+    /*****************************Layer 1 : Convolution*************************************/
+    Layer1();
+    /*****************************Layer 2 : Depthwise Convolution*************************************/
 
-    if (err != CL_SUCCESS)
-    {
-        printf("Error: Failed to set kernel arguments! %d\n", err);
-        exit(1);
-    }
-    //set the local and globar work group size 
-    localWorkSize[0] = 2;
-    localWorkSize[1] = 2;
-    globalWorkSize[0] = dG_w;
-    globalWorkSize[1] = dG_h;
-
-    err = clEnqueueNDRangeKernel(commands, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &myevent);
-    clFinish(commands);
-    if (err != CL_SUCCESS)
-    {
-        printf("Error: Failed to execute kernel! %d\n", err);
-        exit(1);
-    }
-    clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-    clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL);
-    kernelExecTimeNs += end-start;
-    //kernelExecTimeNs += kernelExecTimeNs; 
-    printf("time in nanossec %0.3f \n", kernelExecTimeNs);
-    //Retrieve result from device
-    err = clEnqueueReadBuffer(commands, d_C, CL_TRUE, 0, mem_size_C, h_C, 0, NULL, NULL);
-    clFinish(commands);
-
-    if (err != CL_SUCCESS)
-    {
-    printf("Error: Failed to read output array! %d\n", err);
-    exit(1);
-    }
-
-    printf("Matrix multiplication completed...\n"); 
-    for(i=0;i<5;i++)
-    {
-        for(j=0;j<5;j++)
-        { 
-           printf("%d \t" , h_C[i*dG_w+j]);
-        }
-        printf("\n");
-    }
-    printf("last value %d \n" , h_C[(dG_w*dG_h)-1]);
     //Shutdown and cleanup
     free(h_image);
     free(h_filter);
@@ -355,24 +318,12 @@ int openCLContextConfig( void )
     }
 
     // Create the compute kernel in the program we wish to run
-    //
     kernel = clCreateKernel(program, "matrixMul", &err);
     if (!kernel || err != CL_SUCCESS)
     {
         printf("Error: Failed to create compute kernel!\n");
         exit(1);
     }
-
-    // Create the input and output arrays in device memory for our calculation
-    d_C = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_C, NULL, &err);
-    d_image = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_op_im2col, h_op_im2col, &err);
-    d_filter = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_filter, h_filter, &err);
-
-    if (!d_image || !d_filter || !d_C)
-    {
-        printf("Error: Failed to allocate device memory!\n");
-        exit(1);
-    }    
 }
 // Allocates a matrix with random float entries.
 void randomMemInit(unsigned char* data, int size)
@@ -447,4 +398,90 @@ void stitchChannels(unsigned char* imd,unsigned char* imOut)
     }
 }
 
+void Layer1( void )
+{
+    int itr,i,j;
+    for(itr=0; itr<32 ; itr++)
+    {
+        printf("Itteration %d \n",itr);
+        /*Update the Filter from the Weights file*/
+        for(i=0;i<27;i++)
+        {
+            h_filter[i] = 0;    
+        }
+        if (itr<27)
+        {
+            h_filter[itr] = 1;
+        }
 
+        // Create the input and output arrays in device memory for our calculation
+        d_C = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_C, NULL, &err);
+        d_image = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_op_im2col, h_op_im2col, &err);
+        d_filter = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_filter, h_filter, &err);
+
+        if (!d_image || !d_filter || !d_C)
+        {
+            printf("Error: Failed to allocate device memory!\n");
+            exit(1);
+        }    
+        //Launch OpenCL kernel
+        int argK = K_D;
+        int argH = dG_h;
+        int argW = dG_w;
+        int argChannel = CHANNELS;
+        err = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&d_C);
+        err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&d_image);
+        err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&d_filter);
+        err |= clSetKernelArg(kernel, 3, sizeof(int), (void *)&argK);
+        err |= clSetKernelArg(kernel, 4, sizeof(int), (void *)&argH);
+        err |= clSetKernelArg(kernel, 5, sizeof(int), (void *)&argW);
+        err |= clSetKernelArg(kernel, 6, sizeof(int), (void *)&argChannel);
+
+        if (err != CL_SUCCESS)
+        {
+            printf("Error: Failed to set kernel arguments! %d\n", err);
+            exit(1);
+        }
+        //set the local and globar work group size 
+        localWorkSize[0] = 2;
+        localWorkSize[1] = 2;
+        globalWorkSize[0] = dG_w;
+        globalWorkSize[1] = dG_h;
+
+        err = clEnqueueNDRangeKernel(commands, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &myevent);
+
+        clFinish(commands);
+        if (err != CL_SUCCESS)
+        {
+            printf("Error: Failed to execute kernel! %d\n", err);
+            exit(1);
+        }
+        clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+        clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL);
+        kernelExecTimeNs += end-start;
+
+        //kernelExecTimeNs += kernelExecTimeNs; 
+        printf("time in nanossec %0.3f \n", kernelExecTimeNs);
+        //Retrieve result from device
+        err = clEnqueueReadBuffer(commands, d_C, CL_TRUE, 0, mem_size_C, h_C, 0, NULL, NULL);
+        clFinish(commands);
+
+        if (err != CL_SUCCESS)
+        {
+        printf("Error: Failed to read output array! %d\n", err);
+        exit(1);
+        }
+
+        printf("Matrix multiplication completed...\n"); 
+        for(i=0;i<5;i++)
+        {
+            for(j=0;j<5;j++)
+            { 
+               printf("%d \t" , h_C[i*dG_w+j]);
+            }
+            printf("\n");
+        }
+        printf("last value %d \n" , h_C[(dG_w*dG_h)-1]);
+    }
+
+}
