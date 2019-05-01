@@ -10,20 +10,22 @@
 #include <CL/cl.h>
 #include <stdbool.h>
 
-#define W 224
-#define H 224
-#define K_D 3
-#define CHANNELS 3
-//Data for OP of 1st Layer DepthWise
-#define W_1 112
-#define H_1 112
+/*Layer1 Varaible and constants defination*/
+#define W_1 224
+#define H_1 224
 #define K_D_1 3
-#define CHANNELS_1 32
-//Data for OP of 2st Layer Pointwise
+#define CHANNELS_1 3 //Channels of input
+#define NO_OF_FILTERS_1 32 //Channels of input
+//Data for OP of 1st Layer DepthWise
 #define W_2 112
 #define H_2 112
-#define K_D_2 1
+#define K_D_2 3
 #define CHANNELS_2 32
+//Data for OP of 2st Layer Pointwise
+#define W_3 112
+#define H_3 112
+#define K_D_3 1
+#define CHANNELS_3 32
 /*Function Prototype*/
 int decode_image(unsigned char* frame, char filename[]);
 void stitchChannels(unsigned char* imd,unsigned char* imOut);
@@ -55,7 +57,7 @@ cl_platform_id platform_ids[100];
 // OpenCL device memory for matrices
 cl_mem d_image;
 cl_mem d_filter;
-cl_mem d_C;
+cl_mem d_output;
 char *KernelSource;
 long lFileSize;
 size_t localWorkSize[2], globalWorkSize[2];
@@ -67,22 +69,22 @@ char filebuff[50];
 int colSize;
 unsigned int mem_size_C;
 unsigned int mem_size_op_im2col;
-unsigned char* h_op_im2col;
+unsigned char* im2colL1;
 unsigned int mem_size_filter;
 unsigned int mem_size_image;
-unsigned char* h_filter;
+unsigned char* filterL1;
 unsigned int size_image;
-unsigned char* h_image;
+unsigned char* main_image;
 unsigned int size_filter;
 unsigned int size_op_im2col;
 int dG_h,dG_w;
-unsigned char* h_imStitchChannel;
+unsigned char* main_image_ss;//ss stands for stitch channel
 unsigned int size_C;
-unsigned char* h_C;
+unsigned char* outputL1;
 //Data for OP of 1st Layer
 unsigned int size_l1_out;
 unsigned int mem_size_l1_out;
-unsigned char* h_l1_out;
+unsigned char* outL1;
 
 unsigned int size_l1_im2col;
 unsigned int mem_size_l1_im2col;
@@ -121,30 +123,40 @@ int main(int argc, char** argv)
 {
     // set seed for rand()
     srand(2014);
-   
+    openCldeviceConfig();
+    /********************Layer1********************/
     //Allocate host memory for image with 3 channels
-    size_image = W * H * K_D;
+    size_image = W_1 * H_1 * K_D_1;
     mem_size_image = sizeof(unsigned char) * size_image;
-    h_image = (unsigned char*) malloc(mem_size_image);
+    main_image = (unsigned char*) malloc(mem_size_image);
 
     //Stitch the image such that CH1 CH2 CH3 in series
-    h_imStitchChannel = (unsigned char*) malloc(mem_size_image);
+    main_image_ss = (unsigned char*) malloc(mem_size_image);
     
     //Allocate host memory for filter
-    size_filter = K_D * K_D * CHANNELS;
+    size_filter = K_D_1 * K_D_1 * CHANNELS_1 * NO_OF_FILTERS_1;
     mem_size_filter = sizeof(unsigned char) * size_filter;
-    h_filter = (unsigned char*)malloc(mem_size_filter);
+    filterL1 = (unsigned char*)malloc(mem_size_filter);
 
     //Allocate host memory for im2col matrix
-    size_op_im2col = K_D*K_D*H*W*CHANNELS;
+    size_op_im2col = K_D_1*K_D_1*H_1*W_1*CHANNELS_1;
     mem_size_op_im2col = sizeof(unsigned char) * size_op_im2col;
-    h_op_im2col = (unsigned char*) malloc(mem_size_op_im2col);      
-    
+    im2colL1 = (unsigned char*) malloc(mem_size_op_im2col); 
+        
     //Allocate host memory op of 1st layer
     size_l1_out = H_1*W_1*CHANNELS_1;
     mem_size_l1_out = sizeof(unsigned char) * size_l1_out;
-    h_l1_out = (unsigned char*) malloc(mem_size_l1_out);      
-        
+    outL1 = (unsigned char*) malloc(mem_size_l1_out);      
+       
+    printf("Initializing OpenCL device...\n");
+
+    decode_image(main_image,"data/dog.ppm");
+    printf("Reading host image..Done\n");
+    /*Layer 1 : Convolution*/
+    Layer1();
+    /*******************Layer 1 Ends****************/
+
+ 
     //Allocate host memory op of Depthewise2 layer
     size_l2_out = H_1*W_1*CHANNELS_1;
     mem_size_l2_out = sizeof(unsigned char) * size_l2_out;
@@ -164,78 +176,24 @@ int main(int argc, char** argv)
     size_l2_out_p = H_2*W_2*64;
     mem_size_l2_out_p = sizeof(unsigned char) * size_l2_out_p;
     h_l2_out_p = (unsigned char*) malloc(mem_size_l2_out_p);      
-    
-    openCldeviceConfig();
-
-    printf("Initializing OpenCL device...\n");
- 
 
 
-    decode_image(h_image,"data/dog.ppm");
-    printf("Reading host image..Done\n");
-    int i,j;   
-
-    //Set filter element 0 to 1
-    //readSquezeNetKernel(h_filter);
-/*    for(i=0;i<27;i++)
-    {
-        h_filter[i] = 1;    
-    }*/
-    
-
-    stitchChannels(h_image,h_imStitchChannel);
-
-    for(i=0;i<5;i++)
-    {
-        for(j=0;j<5;j++)
-        { 
-           printf("%d \t" , h_imStitchChannel[i*W*CHANNELS+j]);
-        }
-        printf("\n");
-    }
-    printf("im2col output \n");
-
-    im2col_cpu(h_imStitchChannel,3,H,W,K_D,2,1,h_op_im2col);
-    printf("Input Image Dim H %d \t W %d \t K_D %d\n",H,W,K_D);
-    printf("im2Col Image Dim H %d \t W %d \n",dG_h,dG_w);
-    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D*K_D*CHANNELS),(dG_h*dG_w));
-    for(i=0;i<27;i++)
-    {
-        for(j=0;j<9;j++)
-        { 
-            printf("%d \t" , h_op_im2col[i*dG_h*dG_w + j]);
-        }
-        printf("\n");
-    }
-
-    //Allocate host memory for the result C
-    size_C = dG_h * dG_w;
-    mem_size_C = sizeof(unsigned char) * size_C;
-    h_C = (unsigned char*) malloc(mem_size_C);
-
-    openCLContextConfig();
-
-    printf("Running matrix multiplication for matrices im2Col_Matrix (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D*K_D*CHANNELS),(dG_h*dG_w),1,(K_D*K_D*CHANNELS)); 
-
-    
-    /*Layer 1 : Convolution*/
-    Layer1();
     /*Layer 2 : Depthwise Convolution*/
-    Layer2Depthwise();
+    //Layer2Depthwise();
     
     /*Layer 3 : Pointwise Convolution*/
-    Layer2Pointhwise();
+    //Layer2Pointhwise();
 
     //Shutdown and cleanup
-    free(h_image);
-    free(h_filter);
-    free(h_C);
-    free(h_op_im2col);
+    free(main_image);
+    free(filterL1);
+    free(outputL1);
+    free(im2colL1);
 
 
     clReleaseMemObject(d_image);
     clReleaseMemObject(d_filter);
-    clReleaseMemObject(d_C);
+    clReleaseMemObject(d_output);
 
     clReleaseProgram(program);
     clReleaseKernel(kernel);
@@ -252,13 +210,13 @@ int decode_image(unsigned char* frame, char filename[]) {
         return -1; 
     }
     fseek(pFile, 15, SEEK_SET);
-    fread(frame, sizeof(char), H*W*3, pFile);   
+    fread(frame, sizeof(char), H_1*W_1*3, pFile);   
     fclose(pFile);
     return 0; 
 }
 void seperateChannels(unsigned char* imd,unsigned char* im1,unsigned char* im2,unsigned char* im3){
     int i,j;    
-    for(i=0,j=0; i<H*W; i++,j+=3){
+    for(i=0,j=0; i<H_1*W_1; i++,j+=3){
         im1[i] = imd[j];
         im2[i] = imd[j+1];
         im3[i] = imd[j+2];                
@@ -457,103 +415,117 @@ long LoadOpenCLKernel(char const* path, char **buf)
 void stitchChannels(unsigned char* imd,unsigned char* imOut)
 {
     int i,j;    
-    for(i=0,j=0; i<H*W; i++,j+=3){
+    for(i=0,j=0; i<H_1*W_1; i++,j+=3){
         imOut[i] = imd[j];
-        imOut[i+(H*W)] = imd[j+1];
-        imOut[i+(H*W*2)] = imd[j+2];                
+        imOut[i+(H_1*W_1)] = imd[j+1];
+        imOut[i+(H_1*W_1*2)] = imd[j+2];                
     }
 }
 
 void Layer1( void )
 {
     int itr,i,j,jf=0;
-    for(itr=0; itr<32 ; itr++)
+    stitchChannels(main_image,main_image_ss);
+
+    for(i=0;i<5;i++)
     {
-        printf("Itteration %d \n",itr);
-        /*Update the Filter from the Weights file*/
-        for(i=0;i<27;i++)
-        {
-            h_filter[i] = 0;    
+        for(j=0;j<5;j++)
+        { 
+           printf("%d \t" , main_image_ss[i*W_1*CHANNELS_1+j]);
         }
-        if (itr<27)
-        {
-            h_filter[itr] = 1;
+        printf("\n");
+    }
+    printf("im2col output \n");
+
+    im2col_cpu(main_image_ss,3,H_1,W_1,K_D_1,2,1,im2colL1);
+    printf("Input Image Dim H_1 %d \t W_1 %d \t K_D_1 %d\n",H_1,W_1,K_D_1);
+    printf("im2Col Image Dim H_1 %d \t W_1 %d \n",dG_h,dG_w);
+    printf("im2Col Matrix Dim H_1 %d \t W_1 %d \n",(K_D_1*K_D_1*CHANNELS_1),(dG_h*dG_w));
+    for(i=0;i<27;i++)
+    {
+        for(j=0;j<9;j++)
+        { 
+            printf("%d \t" , im2colL1[i*dG_h*dG_w + j]);
         }
-
-        // Create the input and output arrays in device memory for our calculation
-        d_C = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_C, NULL, &err);
-        d_image = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_op_im2col, h_op_im2col, &err);
-        d_filter = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_filter, h_filter, &err);
-
-        if (!d_image || !d_filter || !d_C)
-        {
-            printf("Error: Failed to allocate device memory!\n");
-            exit(1);
-        }    
-        //Launch OpenCL kernel
-        int argK = K_D;
-        int argH = dG_h;
-        int argW = dG_w;
-        int argChannel = CHANNELS;
-        err = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&d_C);
-        err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&d_image);
-        err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&d_filter);
-        err |= clSetKernelArg(kernel, 3, sizeof(int), (void *)&argK);
-        err |= clSetKernelArg(kernel, 4, sizeof(int), (void *)&argH);
-        err |= clSetKernelArg(kernel, 5, sizeof(int), (void *)&argW);
-        err |= clSetKernelArg(kernel, 6, sizeof(int), (void *)&argChannel);
-
-        if (err != CL_SUCCESS)
-        {
-            printf("Error: Failed to set kernel arguments! %d\n", err);
-            exit(1);
-        }
-        //set the local and globar work group size 
-        localWorkSize[0] = 2;
-        localWorkSize[1] = 2;
-        globalWorkSize[0] = dG_w;
-        globalWorkSize[1] = dG_h;
-
-        err = clEnqueueNDRangeKernel(commands, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &myevent);
-
-        clFinish(commands);
-        if (err != CL_SUCCESS)
-        {
-            printf("Error: Failed to execute kernel! %d\n", err);
-            exit(1);
-        }
-        clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-        clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL);
-        kernelExecTimeNs += end-start;
-
-        printf("time in nanossec %0.3f \n", kernelExecTimeNs);
-        //Retrieve result from device
-        err = clEnqueueReadBuffer(commands, d_C, CL_TRUE, 0, mem_size_C, h_C, 0, NULL, NULL);
-        clFinish(commands);
-        for(i=0; i<mem_size_C; i++,jf++)
-        {    
-            h_l1_out[jf] = h_C[i];
-        }
-        if (err != CL_SUCCESS)
-        {
-            printf("Error: Failed to read output array! %d\n", err);
-            exit(1);
-        }
-
-        printf("Matrix multiplication completed...\n"); 
-        
-        for(i=0;i<5;i++)
-        {
-            for(j=0;j<5;j++)
-            { 
-               //printf("%d \t" , h_C[i*dG_w+j]);
-            }
-            //printf("\n");
-        }
-        printf("last value %d \n" , h_C[(dG_w*dG_h)-1]);
+        printf("\n");
     }
 
+    //Allocate host memory for the result C
+    size_C = dG_h * dG_w * NO_OF_FILTERS_1;
+    mem_size_C = sizeof(unsigned char) * size_C;
+    outputL1 = (unsigned char*) malloc(mem_size_C);
+
+    openCLContextConfig();
+
+
+    filterL1[0] = 0;    
+
+    // Create the input and output arrays in device memory for our calculation
+    d_output = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_C, NULL, &err);
+    d_image = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_op_im2col, im2colL1, &err);
+    d_filter = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_filter, filterL1, &err);
+
+    if (!d_image || !d_filter || !d_output)
+    {
+        printf("Error: Failed to allocate device memory!\n");
+        exit(1);
+    }    
+    //Launch OpenCL kernel
+    int argF_H = NO_OF_FILTERS_1;
+    int argF_W = K_D_1*K_D_1*CHANNELS_1;
+    int argI_H = K_D_1*K_D_1*CHANNELS_1;
+    int argI_W = dG_w*dG_h*CHANNELS_1;
+    int argO_W = dG_w*dG_h;
+    printf("Running matrix multiplication for matrices im2Col_Matrix (%dx%d) and Filter_Matrix (%dx%d) ...\n",argI_H,argI_W,argF_H,argF_W); 
+
+    err = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&d_output);
+    err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&d_image);
+    err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&d_filter);
+    err |= clSetKernelArg(kernel, 3, sizeof(int), (void *)&argF_H);
+    err |= clSetKernelArg(kernel, 4, sizeof(int), (void *)&argF_W);
+    err |= clSetKernelArg(kernel, 5, sizeof(int), (void *)&argI_H);
+    err |= clSetKernelArg(kernel, 6, sizeof(int), (void *)&argI_W);
+    err |= clSetKernelArg(kernel, 7, sizeof(int), (void *)&argO_W);
+
+    if (err != CL_SUCCESS)
+    {
+        printf("Error: Failed to set kernel arguments! %d\n", err);
+        exit(1);
+    }
+    //set the local and globar work group size 
+    localWorkSize[0] = 2;
+    localWorkSize[1] = 2;
+    globalWorkSize[0] = dG_w*dG_h;
+    globalWorkSize[1] = NO_OF_FILTERS_1;
+
+    err = clEnqueueNDRangeKernel(commands, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &myevent);
+
+    clFinish(commands);
+    if (err != CL_SUCCESS)
+    {
+        printf("Error: Failed to execute kernel! %d\n", err);
+        exit(1);
+    }
+    clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+    clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL);
+    kernelExecTimeNs += end-start;
+
+    printf("time in nanossec %0.3f \n", kernelExecTimeNs);
+    //Retrieve result from device
+    err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_C, outputL1, 0, NULL, NULL);
+    clFinish(commands);
+   
+    if (err != CL_SUCCESS)
+    {
+        printf("Error: Failed to read output array! %d\n", err);
+        exit(1);
+    }
+
+    printf("Matrix multiplication completed...\n"); 
+
+    printf("last value %d \n" , outputL1[(dG_w*dG_h*NO_OF_FILTERS_1)-1]);
 }
+/*
 void Layer2Depthwise( void )
 {
     int i,j,jf,itr;
@@ -581,7 +553,7 @@ void Layer2Depthwise( void )
                 printf("%d \t" , h_l1_im2col[i*dG_h*dG_w + j]);
             }
             printf("\n");
-        }*/
+        }
 
         //Allocate host memory for the result C
         size_op_l1 = dG_h * dG_w;
@@ -693,7 +665,7 @@ void Layer2Pointhwise( void )
                 printf("%d \t" , h_l1_im2col[i*dG_h*dG_w + j]);
             }
             printf("\n");
-        }*/
+        }
 
         h_filter_l1_p[0]=1;
 
@@ -776,4 +748,4 @@ void Layer2Pointhwise( void )
         }
         printf("PointWise Layer done %d\n",itr);
     }
-}
+}*/
