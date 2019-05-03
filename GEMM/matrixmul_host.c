@@ -469,7 +469,7 @@ int main(int argc, char** argv)
     mem_size_l10_out = sizeof(unsigned char) * size_l10_out;
     outputL10 = (unsigned char*) malloc(mem_size_l10_out);      
     
-    Layer10();
+    //Layer10();
 
   /*******************Layer 10 Ends*********************/
 
@@ -1663,4 +1663,3 @@ void Layer10( void )
     printf("time in %0.3f nanossec \n", kernelExecTimeNs);
     printf("Depthwise Layer - 10 done %d\n",itr);
 }
-

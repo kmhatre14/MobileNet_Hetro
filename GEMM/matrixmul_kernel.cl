@@ -6,30 +6,27 @@
  
 // OpenCL Kernel
 __kernel void
-matrixMul(__global unsigned char* C, 
+matrixMul(__global unsigned char* ouput, 
           __global unsigned char* img_im2col, 
           __global unsigned char* filter, 
-          int K_D, int H, int W, int channel)
+          int argF_H, int argF_W, int argI_H, int argI_W, int argO_W)
 {
-    int tx = get_global_id(0);//158 
-    int ty = get_global_id(1);//118
+    int tx = get_global_id(0);//112*112
+    int ty = get_global_id(1);//32
     int value = 0;
-
-    for (int k = 0; k < (K_D*K_D*channel); ++k)
+    for (int k = 0; k < argF_W; ++k)
     {
-        int elementA = filter[k];
-        int elementB = img_im2col[k*H*W + (ty*W+tx)];
+        int elementA = filter[ty*argF_W + k];
+        int elementB = img_im2col[k*argI_W+tx];
         value += elementA * elementB;
-        //   if(tx == 1 && ty ==0){
-        //       printf("%d %d \n",elementA,elementB);
-        //   }
     }
     //Considering 128 as a threshould for 0
-    value = value/(K_D*K_D*channel);   
+    value = value/argF_W;   
+    //ReLU
     if(value < 128)
     {
         value = 0;
     }
-    //write back the answer
-    C[ty*W+tx] = value;
+    ouput[ty*argO_W+tx] = value;
 }
+
