@@ -153,6 +153,32 @@
 #define K_D_23 1
 #define CHANNELS_23 512
 #define NO_OF_FILTERS_23 512 //Channels of input
+/*Layer24 Depthwise*/
+#define W_24 14
+#define H_24 14
+#define K_D_24 3
+#define CHANNELS_24 512
+#define NO_OF_FILTERS_24 512
+/*Layer25 Pointwise*/
+#define W_25 7
+#define H_25 7
+#define K_D_25 1
+#define CHANNELS_25 512
+#define NO_OF_FILTERS_25 1024
+// Layer26 Depthwise
+#define W_26 7
+#define H_26 7
+#define K_D_26 3
+#define CHANNELS_26 1024
+#define NO_OF_FILTERS_26 1024
+//Layer27 Pointwise 
+#define W_27 7
+#define H_27 7
+#define K_D_27 1
+#define CHANNELS_27 1024
+#define NO_OF_FILTERS_27 1024
+
+
 /*Function Prototype*/
 int decode_image(unsigned char* frame, char filename[]);
 void stitchChannels(unsigned char* imd,unsigned char* imOut);
@@ -189,6 +215,11 @@ void Layer20( void );
 void Layer21( void );
 void Layer22( void );
 void Layer23( void );
+void Layer24( void );
+void Layer25( void );
+void Layer26( void );
+void Layer27( void );
+
 /*Cl device Variables */
 int err;                            // error code returned from api calls
 cl_device_id device_id;             // compute device id 
@@ -565,7 +596,70 @@ unsigned char* outputL23;
 unsigned int size_filter_l23_p;
 unsigned int mem_size_filter_l23_p;
 unsigned char* filter23;
+//For Layer 24 Depthwise
+unsigned int size_l24_im2col;
+unsigned int mem_size_l24_im2col;
+unsigned char* im2colL24;
+
+unsigned int size_l24_out;
+unsigned int mem_size_l24_out;
+unsigned char* outputL24;
+
+unsigned int size_filter_l24_d;
+unsigned int mem_size_filter_l24_d;
+unsigned char* filterL24;
+
+unsigned int size_op_l24;
+unsigned int mem_size_op_l24;
+unsigned char* outputL24_eachFilter;
+//For layer 25 pointwise
+
+
+unsigned int size_l25_im2col;
+unsigned int mem_size_l25_im2col;
+unsigned char* im2col25;
+
+unsigned int size_l25_out_p;
+unsigned int mem_size_l25_out_p;
+unsigned char* outputL25;
+
+unsigned int size_filter_l25_p;
+unsigned int mem_size_filter_l25_p;
+unsigned char* filter25;
+
+//Layer 26 Depthwise
+unsigned int size_l26_im2col;
+unsigned int mem_size_l26_im2col;
+unsigned char* im2colL26;
+
+unsigned int size_l26_out;
+unsigned int mem_size_l26_out;
+unsigned char* outputL26;
+
+unsigned int size_filter_l26_d;
+unsigned int mem_size_filter_l26_d;
+unsigned char* filterL26;
+
+unsigned int size_op_l26;
+unsigned int mem_size_op_l26;
+unsigned char* outputL26_eachFilter;
+
+//Layer 27 Pointwise
+unsigned int size_l27_im2col;
+unsigned int mem_size_l27_im2col;
+unsigned char* im2col27;
+
+unsigned int size_l27_out_p;
+unsigned int mem_size_l27_out_p;
+unsigned char* outputL27;
+
+unsigned int size_filter_l27_p;
+unsigned int mem_size_filter_l27_p;
+unsigned char* filter27;
+
 int main(int argc, char** argv)
+
+
 {
     // set seed for rand()
     srand(2014);
@@ -999,9 +1093,75 @@ int main(int argc, char** argv)
     Layer23();
    /*******************Layer 23 Ends****************/
 
-
+   /*******************Layer 24 Depthwise s1****************/
+    size_l24_im2col = K_D_24*K_D_24*H_24*W_24;
+    mem_size_l24_im2col = sizeof(unsigned char) * size_l24_im2col;
+    im2colL24 = (unsigned char*) malloc(mem_size_l24_im2col);      
     
-    //Shutdown and cleanup
+    //Allocate host memory op of Depthewise2 layer
+    size_l24_out = H_24*W_24*NO_OF_FILTERS_24;
+    mem_size_l24_out = sizeof(unsigned char) * size_l24_out;
+    outputL24 = (unsigned char*) malloc(mem_size_l24_out);  
+
+    Layer24();
+   /*******************Layer 24 Depthwise ENDS s1****************/
+
+   /*******************Layer 25 Pointwise s1****************/
+
+
+    size_l25_im2col = K_D_25*K_D_25*H_25*W_25*CHANNELS_25;
+    mem_size_l25_im2col = sizeof(unsigned char) * size_l25_im2col;
+    im2col25 = (unsigned char*) malloc(mem_size_l25_im2col);  
+  
+    //Allocate host memory op of Pointwise layer
+    size_l25_out_p = H_25*W_25*NO_OF_FILTERS_25;
+    mem_size_l25_out_p = sizeof(unsigned char) * size_l25_out_p;
+    outputL25 = (unsigned char*) malloc(mem_size_l25_out_p);      
+
+    //Allocate host memory for filter
+    size_filter_l25_p = K_D_25 * K_D_25 * CHANNELS_25 *NO_OF_FILTERS_25 ;
+    mem_size_filter_l25_p = sizeof(unsigned char) * size_filter_l25_p;
+    filter25 = (unsigned char*)malloc(mem_size_filter_l25_p);
+
+    Layer25();
+
+   /*******************Layer 25 Pointwise ENDS****************/
+      /*******************Layer 26 depthwise****************/
+    size_l26_im2col = K_D_26*K_D_26*H_26*W_26;
+    mem_size_l26_im2col = sizeof(unsigned char) * size_l26_im2col;
+    im2colL26 = (unsigned char*) malloc(mem_size_l26_im2col);      
+    
+    //Allocate host memory op of Depthewise2 layer
+    size_l26_out = H_26*W_26*NO_OF_FILTERS_26;
+    mem_size_l26_out = sizeof(unsigned char) * size_l26_out;
+    outputL26 = (unsigned char*) malloc(mem_size_l26_out);      
+    
+    Layer26();
+    /*******************Layer 26 depthwise ENDS****************/
+
+    /*******************Layer 27 Pointwise ****************/
+
+    size_l27_im2col = K_D_27*K_D_27*H_27*W_27*CHANNELS_27;
+    mem_size_l27_im2col = sizeof(unsigned char) * size_l27_im2col;
+    im2col27 = (unsigned char*) malloc(mem_size_l27_im2col);  
+  
+    //Allocate host memory op of Pointwise layer
+
+    size_l27_out_p = H_27*W_27*NO_OF_FILTERS_27;
+    mem_size_l27_out_p = sizeof(unsigned char) * size_l27_out_p;
+    outputL27 = (unsigned char*) malloc(mem_size_l27_out_p);      
+
+    //Allocate host memory for filter
+    size_filter_l27_p = K_D_27 * K_D_27 * CHANNELS_27 *NO_OF_FILTERS_27 ;
+    mem_size_filter_l27_p = sizeof(unsigned char) * size_filter_l27_p;
+    filter27 = (unsigned char*)malloc(mem_size_filter_l27_p);
+
+    Layer27();
+
+    /*******************Layer 27 pointwise ENDS****************/
+
+
+
     free(main_image);
     free(filterL1);
     free(outputL1);
@@ -1018,7 +1178,7 @@ int main(int argc, char** argv)
     clReleaseContext(context);
     return 0;
 }
-
+    
 int decode_image(unsigned char* frame, char filename[]) {
     FILE *pFile;
     pFile = fopen(filename, "r");
@@ -3401,4 +3561,384 @@ void Layer23( void )
 }
 
 
+//Layer 24 Depthwise s2
+void Layer24( void )
+{
+    int i,j,jf,itr;
 
+    //Allocate host memory for filter
+    size_filter_l24_d = K_D_24 * K_D_24;
+    mem_size_filter_l24_d = sizeof(unsigned char) * size_filter_l24_d;
+    filterL24 = (unsigned char*)malloc(mem_size_filter_l24_d);
+    kernelExecTimeNs = 0;
+    //get input for previous layer 
+    for(itr=0; itr<32; itr++)
+    {
+        //Convert each chhannel from input to im2col
+        im2col_cpu(outputL23,3,H_24,W_24,K_D_24,2,1,im2colL24);
+
+        //printf("Feature Map Dim H_2 %d \t W_2 %d \t K_D_2 %d\n",H_2,W_2,K_D_2);
+        //printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+        //printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_2*K_D_2),(dG_h*dG_w));
+
+        //Allocate host memory for the result C
+        size_op_l24 = dG_h * dG_w;
+        mem_size_op_l24 = sizeof(unsigned char) * size_op_l24;
+        outputL24_eachFilter = (unsigned char*) malloc(mem_size_op_l24);
+
+
+        //Create the Filter for 3x3 convolution 
+        filterL24[0]=1;
+
+        //Call the kernel with the following matrix 
+        //Create the input and output arrays in device memory for our calculation
+        d_output = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_op_l24, NULL, &err);
+        d_image = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_l24_im2col, im2colL24, &err);
+        d_filter = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_filter_l24_d, filterL24, &err);
+
+        if (!d_image || !d_filter || !d_output)
+
+        {
+            printf("Error: Failed to allocate device memory!\n");
+            exit(1);
+        }    
+        //Launch OpenCL kernel
+        int argF_H = 1;
+        int argF_W = K_D_24*K_D_24;
+        int argI_H = K_D_24*K_D_24;
+        int argI_W = dG_w*dG_h;
+        int argO_W = dG_w*dG_h;
+        //printf("Running GEMM Layer2Depth (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_2*K_D_2),(dG_h*dG_w),1,(K_D_2*K_D_2)); 
+
+        err = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&d_output);
+        err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&d_image);
+        err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&d_filter);
+        err |= clSetKernelArg(kernel, 3, sizeof(int), (void *)&argF_H);
+        err |= clSetKernelArg(kernel, 4, sizeof(int), (void *)&argF_W);
+        err |= clSetKernelArg(kernel, 5, sizeof(int), (void *)&argI_H);
+        err |= clSetKernelArg(kernel, 6, sizeof(int), (void *)&argI_W);
+        err |= clSetKernelArg(kernel, 7, sizeof(int), (void *)&argO_W);
+
+        if (err != CL_SUCCESS)
+        {
+            printf("Error: Failed to set kernel arguments! %d\n", err);
+            exit(1);
+        }
+        printf("%d  %d\n", dG_w,dG_h);
+        //set the local and globar work group size 
+        localWorkSize[0] = 1;
+        localWorkSize[1] = 1;
+        globalWorkSize[0] = dG_w;
+        globalWorkSize[1] = dG_h;
+
+        err = clEnqueueNDRangeKernel(commands, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &myevent);
+
+        clFinish(commands);
+        if (err != CL_SUCCESS)
+        {
+            printf("Error: Failed to execute kernel! %d\n", err);
+            exit(1);
+        }
+        clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+        clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL);
+        kernelExecTimeNs += end-start;
+        TotalTime +=end-start;
+
+        //Retrieve result from device
+        err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_op_l24, outputL24_eachFilter, 0, NULL, NULL);
+        clFinish(commands);
+
+        if (err != CL_SUCCESS)
+        {
+            printf("Error: Failed to read output array! %d\n", err);
+            exit(1);
+        }
+        //Store the data from each convolution to an array
+
+        for(i=0; i<size_op_l24; i++,jf++)
+
+        {    
+
+            outputL24[jf] = outputL24_eachFilter[i];
+        }
+    }
+    printf("time in %0.3f nanossec \n", kernelExecTimeNs);
+    printf("Depthwise Layer - 24 done %d\n",itr);
+
+}
+
+    //Layer 25 Pointwise
+
+    void Layer25( void )
+{
+    int i,j,jf=0,itr;
+
+    //Convert each chhannel from input to im2col
+    im2col_cpu(outputL24,CHANNELS_25,H_25,W_25,K_D_25,1,0,im2col25);
+
+    printf("Feature Map Dim H_25 %d \t W_25 %d \t K_D_25 %d\n",H_25,W_25,K_D_25);
+    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_25*K_D_25),(dG_h*dG_w));
+
+    filter25[0]=1;
+
+    printf("Running GEMM Layer25 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_25*K_D_25*CHANNELS_25),(dG_h*dG_w),1,(K_D_25*K_D_25*CHANNELS_25)); 
+
+    //Call the kernel with the following matrix 
+    //Create the input and output arrays in device memory for our calculation
+    d_output = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_l25_out_p, NULL, &err);
+    d_image = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_l25_im2col, im2col25, &err);
+    d_filter = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_filter_l25_p, filter25, &err);
+
+    if (!d_image || !d_filter || !d_output)
+    {
+        printf("Error: Failed to allocate device memory!\n");
+        exit(1);
+    }    
+    //Launch OpenCL kernel
+    int argF_H = NO_OF_FILTERS_25;
+    int argF_W = K_D_25*K_D_25*CHANNELS_25;
+    int argI_H = K_D_25*K_D_25*CHANNELS_25;
+    int argI_W = dG_w*dG_h;
+    int argO_W = dG_w*dG_h;
+    err = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&d_output);
+    err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&d_image);
+    err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&d_filter);
+    err |= clSetKernelArg(kernel, 3, sizeof(int), (void *)&argF_H);
+    err |= clSetKernelArg(kernel, 4, sizeof(int), (void *)&argF_W);
+    err |= clSetKernelArg(kernel, 5, sizeof(int), (void *)&argI_H);
+    err |= clSetKernelArg(kernel, 6, sizeof(int), (void *)&argI_W);
+    err |= clSetKernelArg(kernel, 7, sizeof(int), (void *)&argO_W);
+
+    if (err != CL_SUCCESS)
+    {
+        printf("Error: Failed to set kernel arguments! %d\n", err);
+        exit(1);
+    }
+    //set the local and globar work group size 
+    localWorkSize[0] = 1;
+    localWorkSize[1] = 1;
+    globalWorkSize[0] = dG_w*dG_h;
+    globalWorkSize[1] = NO_OF_FILTERS_25;
+
+    err = clEnqueueNDRangeKernel(commands, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &myevent);
+    clFinish(commands);
+    if (err != CL_SUCCESS)
+    {
+        printf("Error: Failed to execute kernel! %d\n", err);
+        exit(1);
+    }
+    clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+    clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL);
+    TotalTime +=end-start;
+    kernelExecTimeNs = end-start;
+
+
+    printf("time in  %0.3f nanossec\n", kernelExecTimeNs);
+    printf("time in  %0.3f nanossec\n", TotalTime);
+    //Retrieve result from device
+    err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l25_out_p, outputL25, 0, NULL, NULL);
+    clFinish(commands);
+
+    if (err != CL_SUCCESS)
+    {
+        printf("Error: Failed to read output array! %d\n", err);
+        exit(1);
+    }
+
+    printf("Matrix multiplication completed...\n"); 
+
+    printf("PointWise Layer 25 done %d\n",itr);
+}
+
+
+//Layer 26
+ void Layer26( void )
+{
+    int i,j,jf,itr;
+
+    //Allocate host memory for filter
+    size_filter_l26_d = K_D_26 * K_D_26;
+    mem_size_filter_l26_d = sizeof(unsigned char) * size_filter_l26_d;
+    filterL26 = (unsigned char*)malloc(mem_size_filter_l26_d);
+    kernelExecTimeNs = 0;
+    //get input for previous layer 
+    for(itr=0; itr<32; itr++)
+    {
+        //Convert each chhannel from input to im2col
+        im2col_cpu(outputL25,1,H_26,W_26,K_D_26,2,1,im2colL26);
+
+        //printf("Feature Map Dim H_2 %d \t W_2 %d \t K_D_2 %d\n",H_2,W_2,K_D_2);
+        //printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+        //printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_2*K_D_2),(dG_h*dG_w));
+
+        //Allocate host memory for the result C
+        size_op_l26 = dG_h * dG_w;
+        mem_size_op_l26 = sizeof(unsigned char) * size_op_l26;
+        outputL26_eachFilter = (unsigned char*) malloc(mem_size_op_l26);
+
+
+        //Create the Filter for 3x3 convolution 
+        filterL26[0]=1;
+
+        //Call the kernel with the following matrix 
+        //Create the input and output arrays in device memory for our calculation
+        d_output = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_op_l26, NULL, &err);
+        d_image = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_l26_im2col, im2colL26, &err);
+        d_filter = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_filter_l26_d, filterL26, &err);
+
+        if (!d_image || !d_filter || !d_output)
+
+        {
+            printf("Error: Failed to allocate device memory!\n");
+            exit(1);
+        }    
+        //Launch OpenCL kernel
+        int argF_H = 1;
+        int argF_W = K_D_26*K_D_26;
+        int argI_H = K_D_26*K_D_26;
+        int argI_W = dG_w*dG_h;
+        int argO_W = dG_w*dG_h;
+        //printf("Running GEMM Layer2Depth (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_2*K_D_2),(dG_h*dG_w),1,(K_D_2*K_D_2)); 
+
+        err = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&d_output);
+        err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&d_image);
+        err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&d_filter);
+        err |= clSetKernelArg(kernel, 3, sizeof(int), (void *)&argF_H);
+        err |= clSetKernelArg(kernel, 4, sizeof(int), (void *)&argF_W);
+        err |= clSetKernelArg(kernel, 5, sizeof(int), (void *)&argI_H);
+        err |= clSetKernelArg(kernel, 6, sizeof(int), (void *)&argI_W);
+        err |= clSetKernelArg(kernel, 7, sizeof(int), (void *)&argO_W);
+
+        if (err != CL_SUCCESS)
+        {
+            printf("Error: Failed to set kernel arguments! %d\n", err);
+            exit(1);
+        }
+        //set the local and globar work group size 
+        localWorkSize[0] = 1;
+        localWorkSize[1] = 1;
+        globalWorkSize[0] = dG_w;
+        globalWorkSize[1] = dG_h;
+
+        err = clEnqueueNDRangeKernel(commands, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &myevent);
+
+        clFinish(commands);
+        if (err != CL_SUCCESS)
+        {
+            printf("Error: Failed to execute kernel! %d\n", err);
+            exit(1);
+        }
+        clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+        clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL);
+        kernelExecTimeNs += end-start;
+        TotalTime +=end-start;
+
+        //Retrieve result from device
+        err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_op_l26, outputL26_eachFilter, 0, NULL, NULL);
+        clFinish(commands);
+
+        if (err != CL_SUCCESS)
+        {
+            printf("Error: Failed to read output array! %d\n", err);
+            exit(1);
+        }
+        //Store the data from each convolution to an array
+
+        for(i=0; i<size_op_l26; i++,jf++)
+
+        {    
+
+            outputL26[jf] = outputL26_eachFilter[i];
+        }
+    }
+    printf("time in %0.3f nanossec \n", kernelExecTimeNs);
+    printf("Depthwise Layer - 26 done %d\n",itr);
+
+}
+
+
+//Layer 27
+
+
+   void Layer27( void )
+{
+    int i,j,jf=0,itr;
+
+    //Convert each chhannel from input to im2col
+    im2col_cpu(outputL26,CHANNELS_27,H_27,W_27,K_D_27,1,0,im2col27);
+
+    printf("Feature Map Dim H_27 %d \t W_27 %d \t K_D_27 %d\n",H_27,W_27,K_D_27);
+    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_27*K_D_27),(dG_h*dG_w));
+
+    filter27[0]=1;
+
+    printf("Running GEMM Layer27 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_27*K_D_27*CHANNELS_27),(dG_h*dG_w),1,(K_D_27*K_D_27*CHANNELS_27)); 
+
+    //Call the kernel with the following matrix 
+    //Create the input and output arrays in device memory for our calculation
+    d_output = clCreateBuffer(context, CL_MEM_READ_WRITE, mem_size_l27_out_p, NULL, &err);
+    d_image = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_l27_im2col, im2col27, &err);
+    d_filter = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, mem_size_filter_l27_p, filter27, &err);
+
+    if (!d_image || !d_filter || !d_output)
+    {
+        printf("Error: Failed to allocate device memory!\n");
+        exit(1);
+    }    
+    //Launch OpenCL kernel
+    int argF_H = NO_OF_FILTERS_27;
+    int argF_W = K_D_27*K_D_27*CHANNELS_27;
+    int argI_H = K_D_27*K_D_27*CHANNELS_27;
+    int argI_W = dG_w*dG_h;
+    int argO_W = dG_w*dG_h;
+    err = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&d_output);
+    err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&d_image);
+    err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&d_filter);
+    err |= clSetKernelArg(kernel, 3, sizeof(int), (void *)&argF_H);
+    err |= clSetKernelArg(kernel, 4, sizeof(int), (void *)&argF_W);
+    err |= clSetKernelArg(kernel, 5, sizeof(int), (void *)&argI_H);
+    err |= clSetKernelArg(kernel, 6, sizeof(int), (void *)&argI_W);
+    err |= clSetKernelArg(kernel, 7, sizeof(int), (void *)&argO_W);
+
+    if (err != CL_SUCCESS)
+    {
+        printf("Error: Failed to set kernel arguments! %d\n", err);
+        exit(1);
+    }
+    //set the local and globar work group size 
+    localWorkSize[0] = 1;
+    localWorkSize[1] = 1;
+    globalWorkSize[0] = dG_w*dG_h;
+    globalWorkSize[1] = NO_OF_FILTERS_27;
+
+    err = clEnqueueNDRangeKernel(commands, kernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &myevent);
+    clFinish(commands);
+    if (err != CL_SUCCESS)
+    {
+        printf("Error: Failed to execute kernel! %d\n", err);
+        exit(1);
+    }
+    clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+    clGetEventProfilingInfo(myevent, CL_PROFILING_COMMAND_END, sizeof(end), &end, NULL);
+    TotalTime +=end-start;
+    kernelExecTimeNs = end-start;
+
+
+    printf("time in  %0.3f nanossec\n", kernelExecTimeNs);
+    printf("time in  %0.3f nanossec\n", TotalTime);
+    //Retrieve result from device
+    err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l27_out_p, outputL27, 0, NULL, NULL);
+    clFinish(commands);
+
+    if (err != CL_SUCCESS)
+    {
+        printf("Error: Failed to read output array! %d\n", err);
+        exit(1);
+    }
+
+    printf("Matrix multiplication completed...\n"); 
+
+    printf("PointWise Layer 27 done %d\n",itr);
+}
