@@ -276,7 +276,7 @@ unsigned char* im2col9;
 
 unsigned int size_l9_out_p;
 unsigned int mem_size_l9_out_p;
-unsigned char* output9;
+unsigned char* outputL9;
 
 unsigned int size_filter_l9_p;
 unsigned int mem_size_filter_l9_p;
@@ -512,7 +512,7 @@ int main(int argc, char** argv)
     //Allocate host memory op of Pointwise layer
     size_l9_out_p = H_9*W_9*NO_OF_FILTERS_9;
     mem_size_l9_out_p = sizeof(unsigned char) * size_l9_out_p;
-    output9 = (unsigned char*) malloc(mem_size_l9_out_p);      
+    outputL9 = (unsigned char*) malloc(mem_size_l9_out_p);      
 
     //Allocate host memory for filter
     size_filter_l9_p = K_D_9 * K_D_9 * CHANNELS_9 *NO_OF_FILTERS_9 ;
@@ -534,7 +534,7 @@ int main(int argc, char** argv)
     mem_size_l10_out = sizeof(unsigned char) * size_l10_out;
     outputL10 = (unsigned char*) malloc(mem_size_l10_out);      
     
-    //Layer10();
+    Layer10();
 
   /*******************Layer 10 Ends*********************/
   
@@ -1667,7 +1667,7 @@ void Layer9( void )
     printf("time in  %0.3f nanossec\n", kernelExecTimeNs);
     printf("time in  %0.3f nanossec\n", TotalTime);
     //Retrieve result from device
-    err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l9_out_p, output9, 0, NULL, NULL);
+    err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l9_out_p, outputL9, 0, NULL, NULL);
     clFinish(commands);
 
     if (err != CL_SUCCESS)
@@ -1695,7 +1695,7 @@ void Layer10( void )
     for(itr=0; itr<32; itr++)
     {
         //Convert each chhannel from input to im2col
-        im2col_cpu(outputL10,1,H_10,W_10,K_D_10,1,1,im2colL10);
+        im2col_cpu(outputL9,1,H_10,W_10,K_D_10,1,1,im2colL10);
 
         //printf("Feature Map Dim H_2 %d \t W_2 %d \t K_D_2 %d\n",H_2,W_2,K_D_2);
         //printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
@@ -1774,13 +1774,12 @@ void Layer10( void )
         }
         //Store the data from each convolution to an array
 
-        for(i=0; i<size_op_l1; i++,jf++)
+        for(i=0; i<size_op_l10; i++,jf++)
 
         {    
 
             outputL10[jf] = outputL10_eachFilter[i];
         }
-        
     }
     printf("time in %0.3f nanossec \n", kernelExecTimeNs);
     printf("Depthwise Layer - 10 done %d\n",itr);
@@ -2056,3 +2055,6 @@ void Layer13( void )
 
     printf("PointWise Layer 13 done %d\n",itr);
 }
+
+
+
