@@ -177,6 +177,14 @@
 #define K_D_27 1
 #define CHANNELS_27 1024
 #define NO_OF_FILTERS_27 1024
+//Layer28 AVG POOL 
+#define W_28 7
+#define H_28 7
+#define K_D_28 1
+#define CHANNELS_28 1024
+//Layer29 Fully Connected 
+#define ELEMENTS 1024
+#define CLASSES 1000
 
 
 /*Function Prototype*/
@@ -219,7 +227,8 @@ void Layer24( void );
 void Layer25( void );
 void Layer26( void );
 void Layer27( void );
-
+void Layer28( void );
+void Layer29( void );
 /*Cl device Variables */
 int err;                            // error code returned from api calls
 cl_device_id device_id;             // compute device id 
@@ -656,6 +665,20 @@ unsigned char* outputL27;
 unsigned int size_filter_l27_p;
 unsigned int mem_size_filter_l27_p;
 unsigned char* filter27;
+
+//Layer 28 Avg Pool
+unsigned int size_l28_out_p;
+unsigned int mem_size_l28_out_p;
+unsigned char* outputL28;
+
+//Layer 29 Fully Connected
+unsigned int size_l29_out_p;
+unsigned int mem_size_l29_out_p;
+unsigned char* outputL29;
+
+unsigned int size_filter_l29_p;
+unsigned int mem_size_filter_l29_p;
+unsigned char* filter29;
 
 int main(int argc, char** argv)
 
@@ -1160,6 +1183,31 @@ int main(int argc, char** argv)
 
     /*******************Layer 27 pointwise ENDS****************/
 
+    /*******************Layer 28 Avg Pool ****************/
+
+    size_l28_out_p = CHANNELS_28;
+    mem_size_l28_out_p = sizeof(unsigned char) * size_l28_out_p;
+    outputL28 = (unsigned char*) malloc(mem_size_l28_out_p);      
+
+    Layer28();
+
+    /*******************Layer 28 AVg pool ENDS****************/
+
+
+    /*******************Layer 29 Fully connected ****************/
+
+    //Allocate host memory for filter
+    size_filter_l29_p = CLASSES*ELEMENTS;
+    mem_size_filter_l29_p = sizeof(unsigned char) * size_filter_l29_p;
+    filter29 = (unsigned char*)malloc(mem_size_filter_l29_p);
+
+    size_l29_out_p = CLASSES;
+    mem_size_l29_out_p = sizeof(unsigned char) * size_l29_out_p;
+    outputL29 = (unsigned char*) malloc(mem_size_l29_out_p);      
+
+    Layer29();
+
+    /*******************Layer 29 Fully Connected ENDS****************/
 
 
     free(main_image);
@@ -3858,10 +3906,8 @@ void Layer24( void )
 }
 
 
-//Layer 27
-
-
-   void Layer27( void )
+//Layer 27 Pointwise
+void Layer27( void )
 {
     int i,j,jf=0,itr;
 
@@ -3941,4 +3987,54 @@ void Layer24( void )
     printf("Matrix multiplication completed...\n"); 
 
     printf("PointWise Layer 27 done %d\n",itr);
+    printf("Final op size %d\n",size_l27_out_p);
+    /*for(i=0;i<7;i++)
+    {
+        for(j=0;j<7;j++)
+        { 
+            printf("%d \t" , outputL27[i*dG_w + j]);
+        }
+        printf("\n");
+    }*/
+
+}
+
+//Layer 28 Average Pool 
+void Layer28( void )
+{
+    int i,j,jf=0,itr;
+    int avgx;
+    for(itr=0;itr<CHANNELS_28;itr++)
+    {
+        for(i=0;i<W_28;i++)
+        {
+            for(j=0;j<H_28;j++)
+            { 
+                avgx += outputL27[i*dG_w + j];
+                //printf("%d \t" , outputL27[i*dG_w + j]);
+
+            }
+            //printf("\n");
+        }
+        outputL28[itr] = avgx/(H_28*W_28);
+        avgx = 0;
+    }
+    printf("Layer 28 Done\n");
+}
+
+
+//Layer 29 Fully Connected
+void Layer29( void )
+{   
+    int i,j,jf=0,itr;
+    int fcVar;
+    filter29[0]=1;
+    for(i=0;i<CLASSES;i++)
+    {
+        for(j=0;j<ELEMENTS;j++)
+        {
+            outputL29[i]+=outputL28[j]*filter29[j];
+        }
+    }
+    printf("Layer 29 Fully Connected Done\n");
 }
