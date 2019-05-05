@@ -186,6 +186,8 @@
 #define ELEMENTS 1024
 #define CLASSES 1000
 
+//Layer30 softmax
+#define CLASSES_SOFTMAX 1000
 
 /*Function Prototype*/
 int decode_image(unsigned char* frame, char filename[]);
@@ -229,6 +231,7 @@ void Layer26( void );
 void Layer27( void );
 void Layer28( void );
 void Layer29( void );
+void Layer30( void );
 /*Cl device Variables */
 int err;                            // error code returned from api calls
 cl_device_id device_id;             // compute device id 
@@ -680,9 +683,14 @@ unsigned int size_filter_l29_p;
 unsigned int mem_size_filter_l29_p;
 unsigned char* filter29;
 
+
+//Layer 30 Softmax
+unsigned int size_l30_out_p;
+unsigned int mem_size_l30_out_p;
+unsigned char* outputL30;
+
+
 int main(int argc, char** argv)
-
-
 {
     // set seed for rand()
     srand(2014);
@@ -1209,6 +1217,15 @@ int main(int argc, char** argv)
 
     /*******************Layer 29 Fully Connected ENDS****************/
 
+    /*******************Layer 30 softmax ****************/
+
+    size_l30_out_p = CLASSES_SOFTMAX;
+    mem_size_l30_out_p = sizeof(unsigned char) * size_l30_out_p;
+    outputL30 = (unsigned char*) malloc(mem_size_l30_out_p);      
+
+    Layer30();
+
+    /*******************Layer 30 Softmax ENDS****************/
 
     free(main_image);
     free(filterL1);
@@ -1432,7 +1449,6 @@ long LoadOpenCLKernel(char const* path, char **buf)
 
     /* Make sure the buffer is NUL-terminated, just in case */
     (*buf)[fsz] = '\0';
-
     /* Return the file size */
     return (long)fsz;
 }
@@ -1459,11 +1475,11 @@ void Layer1( void )
 //       }
 //        printf("\n");
 //    }
-    printf("im2col output \n");
+//    printf("im2col output \n");
 
     im2col_cpu(main_image_ss,3,H_1,W_1,K_D_1,2,1,im2colL1);
-    printf("im2Col Image Dim H_1 %d \t W_1 %d \n",dG_h,dG_w);
-    printf("im2Col Matrix Dim H_1 %d \t W_1 %d \n",(K_D_1*K_D_1*CHANNELS_1),(dG_h*dG_w));
+//    printf("im2Col Image Dim H_1 %d \t W_1 %d \n",dG_h,dG_w);
+//    printf("im2Col Matrix Dim H_1 %d \t W_1 %d \n",(K_D_1*K_D_1*CHANNELS_1),(dG_h*dG_w));
 //    for(i=0;i<27;i++)
 //    {
 //        for(j=0;j<9;j++)
@@ -1474,7 +1490,7 @@ void Layer1( void )
 //    }
 
 //        { 
-    printf("Input Image Dim H_1 %d \t W_1 %d \t K_D_1 %d\n",H_1,W_1,K_D_1);
+//    printf("Input Image Dim H_1 %d \t W_1 %d \t K_D_1 %d\n",H_1,W_1,K_D_1);
     //Allocate host memory for the result C
     size_C = dG_h * dG_w * NO_OF_FILTERS_1;
     mem_size_C = sizeof(unsigned char) * size_C;
@@ -1501,7 +1517,7 @@ void Layer1( void )
     int argI_H = K_D_1*K_D_1*CHANNELS_1;
     int argI_W = dG_w*dG_h*CHANNELS_1;
     int argO_W = dG_w*dG_h;
-    printf("Running matrix multiplication for matrices im2Col_Matrix (%dx%d) and Filter_Matrix (%dx%d) ...\n",argI_H,argI_W,argF_H,argF_W); 
+//    printf("Running matrix multiplication for matrices im2Col_Matrix (%dx%d) and Filter_Matrix (%dx%d) ...\n",argI_H,argI_W,argF_H,argF_W); 
 
     err = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&d_output);
     err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&d_image);
@@ -1536,7 +1552,7 @@ void Layer1( void )
     TotalTime +=end-start;
     kernelExecTimeNs = end-start;
 
-    printf("Layer1 time %0.3f nanossec\n", kernelExecTimeNs);
+    printf("Layer1  time %0.3f nanossec\n", kernelExecTimeNs);
     //Retrieve result from device
     err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_C, outputL1, 0, NULL, NULL);
     clFinish(commands);
@@ -1547,9 +1563,9 @@ void Layer1( void )
         exit(1);
     }
 
-    printf("Matrix multiplication completed...\n"); 
+//    printf("Matrix multiplication completed...\n"); 
     
-    printf("last value %d \n" , outputL1[(dG_w*dG_h*NO_OF_FILTERS_1)-1]);
+//    printf("last value %d \n" , outputL1[(dG_w*dG_h*NO_OF_FILTERS_1)-1]);
 }
 
 void Layer2( void )
@@ -1647,8 +1663,8 @@ void Layer2( void )
         }
         
     }
-    printf("Layer2 time in %0.3f nanossec\n", kernelExecTimeNs);
-    printf("Depthwise Layer done %d\n",itr);
+    printf("Layer2  time %0.3f nanossec\n", kernelExecTimeNs);
+//    printf("Depthwise Layer done %d\n",itr);
 }
 //point wise layer
 void Layer3( void )
@@ -1658,13 +1674,13 @@ void Layer3( void )
     //Convert each chhannel from input to im2col
     im2col_cpu(outputL2,CHANNELS_3,H_3,W_3,K_D_3,1,0,im2col3);
 
-    printf("Feature Map Dim H_3 %d \t W_3 %d \t K_D_3 %d\n",H_3,W_3,K_D_3);
-    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
-    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_3*K_D_3),(dG_h*dG_w));
+    //printf("Feature Map Dim H_3 %d \t W_3 %d \t K_D_3 %d\n",H_3,W_3,K_D_3);
+    //printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+    //printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_3*K_D_3),(dG_h*dG_w));
 
     filter3[0]=1;
 
-    printf("Running GEMM Layer2Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_3*K_D_3*CHANNELS_3),(dG_h*dG_w),1,(K_D_3*K_D_3*CHANNELS_3)); 
+    //printf("Running GEMM Layer2Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_3*K_D_3*CHANNELS_3),(dG_h*dG_w),1,(K_D_3*K_D_3*CHANNELS_3)); 
 
     //Call the kernel with the following matrix 
     //Create the input and output arrays in device memory for our calculation
@@ -1715,7 +1731,7 @@ void Layer3( void )
     TotalTime +=end-start;
     kernelExecTimeNs = end-start;
 
-    printf("time in nanossec %0.3f \n", kernelExecTimeNs);
+    printf("Layer3  time %0.3f nanossec\n", kernelExecTimeNs);
     //Retrieve result from device
     err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l2_out_p, output3, 0, NULL, NULL);
     clFinish(commands);
@@ -1726,9 +1742,9 @@ void Layer3( void )
         exit(1);
     }
 
-    printf("Matrix multiplication completed...\n"); 
+//   printf("Matrix multiplication completed...\n"); 
 
-    printf("PointWise Layer done %d\n",itr);
+//    printf("PointWise Layer done %d\n",itr);
 }
 //Layre 4 depthwise s2 
 void Layer4( void )
@@ -1824,15 +1840,13 @@ void Layer4( void )
         //Store the data from each convolution to an array
 
         for(i=0; i<size_op_l1; i++,jf++)
-
         {    
-
             outputL4[jf] = outputL4_eachFilter[i];
         }
         
     }
-    printf("time in %0.3f nanossec \n", kernelExecTimeNs);
-    printf("Depthwise Layer done %d\n",itr);
+    printf("Layer4  time %0.3f nanossec\n", kernelExecTimeNs);
+//    printf("Depthwise Layer done %d\n",itr);
 }
 
 //point wise layer
@@ -1843,13 +1857,13 @@ void Layer5( void )
     //Convert each chhannel from input to im2col
     im2col_cpu(outputL4,CHANNELS_5,H_5,W_5,K_D_5,1,0,im2col5);
 
-    printf("Feature Map Dim H_5 %d \t W_5 %d \t K_D_5 %d\n",H_5,W_5,K_D_5);
-    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
-    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_5*K_D_5),(dG_h*dG_w));
+//    printf("Feature Map Dim H_5 %d \t W_5 %d \t K_D_5 %d\n",H_5,W_5,K_D_5);
+//    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+//    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_5*K_D_5),(dG_h*dG_w));
 
     filter5[0]=1;
 
-    printf("Running GEMM Layer5Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_5*K_D_5*CHANNELS_5),(dG_h*dG_w),1,(K_D_5*K_D_5*CHANNELS_5)); 
+//    printf("Running GEMM Layer5Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_5*K_D_5*CHANNELS_5),(dG_h*dG_w),1,(K_D_5*K_D_5*CHANNELS_5)); 
 
     //Call the kernel with the following matrix 
     //Create the input and output arrays in device memory for our calculation
@@ -1901,8 +1915,8 @@ void Layer5( void )
     kernelExecTimeNs = end-start;
 
 
-    printf("time in  %0.3f nanossec\n", kernelExecTimeNs);
-    printf("time in  %0.3f nanossec\n", TotalTime);
+    printf("Layer5  time %0.3f nanossec\n", kernelExecTimeNs);
+    //printf("time in  %0.3f nanossec\n", TotalTime);
     //Retrieve result from device
     err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l5_out_p, output5, 0, NULL, NULL);
     clFinish(commands);
@@ -1913,9 +1927,9 @@ void Layer5( void )
         exit(1);
     }
 
-    printf("Matrix multiplication completed...\n"); 
+//    printf("Matrix multiplication completed...\n"); 
 
-    printf("PointWise Layer 5 done %d\n",itr);
+//    printf("PointWise Layer 5 done %d\n",itr);
 }
 //Layre 6 depthwise s1
 void Layer6( void )
@@ -2019,8 +2033,8 @@ void Layer6( void )
         }
         
     }
-    printf("time in %0.3f nanossec \n", kernelExecTimeNs);
-    printf("Depthwise Layer -6 done %d\n",itr);
+    printf("Layer6  time %0.3f nanossec\n", kernelExecTimeNs);
+    //printf("Depthwise Layer -6 done %d\n",itr);
 }
 
 //point wise layer
@@ -2031,13 +2045,13 @@ void Layer7( void )
     //Convert each chhannel from input to im2col
     im2col_cpu(outputL6,CHANNELS_7,H_7,W_7,K_D_7,1,0,im2col7);
 
-    printf("Feature Map Dim H_7 %d \t W_7 %d \t K_D_7 %d\n",H_7,W_7,K_D_7);
-    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
-    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_7*K_D_7),(dG_h*dG_w));
+//    printf("Feature Map Dim H_7 %d \t W_7 %d \t K_D_7 %d\n",H_7,W_7,K_D_7);
+//    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+//    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_7*K_D_7),(dG_h*dG_w));
 
     filter7[0]=1;
 
-    printf("Running GEMM Layer7 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_7*K_D_7*CHANNELS_7),(dG_h*dG_w),1,(K_D_7*K_D_7*CHANNELS_7)); 
+//    printf("Running GEMM Layer7 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_7*K_D_7*CHANNELS_7),(dG_h*dG_w),1,(K_D_7*K_D_7*CHANNELS_7)); 
 
     //Call the kernel with the following matrix 
     //Create the input and output arrays in device memory for our calculation
@@ -2089,8 +2103,8 @@ void Layer7( void )
     kernelExecTimeNs = end-start;
 
 
-    printf("time in  %0.3f nanossec\n", kernelExecTimeNs);
-    printf("time in  %0.3f nanossec\n", TotalTime);
+    printf("Layer7  time %0.3f nanossec\n", kernelExecTimeNs);
+//    printf("time in  %0.3f nanossec\n", TotalTime);
     //Retrieve result from device
     err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l7_out_p, output7, 0, NULL, NULL);
     clFinish(commands);
@@ -2101,9 +2115,9 @@ void Layer7( void )
         exit(1);
     }
 
-    printf("Matrix multiplication completed...\n"); 
+//    printf("Matrix multiplication completed...\n"); 
 
-    printf("PointWise Layer 7 done %d\n",itr);
+//    printf("PointWise Layer 7 done %d\n",itr);
 }
 
 //Layer 8 depthwise s2
@@ -2207,8 +2221,8 @@ void Layer8( void )
         }
         
     }
-    printf("time in %0.3f nanossec \n", kernelExecTimeNs);
-    printf("Depthwise Layer - 8 done %d\n",itr);
+    printf("Layer8  time %0.3f nanossec\n", kernelExecTimeNs);
+//    printf("Depthwise Layer - 8 done %d\n",itr);
 }
 
 //point wise layer
@@ -2219,13 +2233,13 @@ void Layer9( void )
     //Convert each chhannel from input to im2col
     im2col_cpu(outputL8,CHANNELS_9,H_9,W_9,K_D_9,1,0,im2col9);
 
-    printf("Feature Map Dim H_9 %d \t W_9 %d \t K_D_9 %d\n",H_9,W_9,K_D_9);
-    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
-    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_9*K_D_9),(dG_h*dG_w));
+//    printf("Feature Map Dim H_9 %d \t W_9 %d \t K_D_9 %d\n",H_9,W_9,K_D_9);
+//    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+//    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_9*K_D_9),(dG_h*dG_w));
 
     filter9[0]=1;
 
-    printf("Running GEMM Layer9 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_9*K_D_9*CHANNELS_9),(dG_h*dG_w),1,(K_D_9*K_D_9*CHANNELS_9)); 
+//    printf("Running GEMM Layer9 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_9*K_D_9*CHANNELS_9),(dG_h*dG_w),1,(K_D_9*K_D_9*CHANNELS_9)); 
 
     //Call the kernel with the following matrix 
     //Create the input and output arrays in device memory for our calculation
@@ -2277,8 +2291,8 @@ void Layer9( void )
     kernelExecTimeNs = end-start;
 
 
-    printf("time in  %0.3f nanossec\n", kernelExecTimeNs);
-    printf("time in  %0.3f nanossec\n", TotalTime);
+    printf("Layer10  time %0.3f nanossec\n", kernelExecTimeNs);
+    //printf("time in  %0.3f nanossec\n", TotalTime);
     //Retrieve result from device
     err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l9_out_p, outputL9, 0, NULL, NULL);
     clFinish(commands);
@@ -2289,9 +2303,8 @@ void Layer9( void )
         exit(1);
     }
 
-    printf("Matrix multiplication completed...\n"); 
-
-    printf("PointWise Layer 9 done %d\n",itr);
+//    printf("Matrix multiplication completed...\n"); 
+//    printf("PointWise Layer 9 done %d\n",itr);
 }
 
 //Layer 10 depthwise s1
@@ -2394,8 +2407,8 @@ void Layer10( void )
             outputL10[jf] = outputL10_eachFilter[i];
         }
     }
-    printf("time in %0.3f nanossec \n", kernelExecTimeNs);
-    printf("Depthwise Layer - 10 done %d\n",itr);
+    printf("Layer10 time %0.3f nanossec\n", kernelExecTimeNs);
+//    printf("Depthwise Layer - 10 done %d\n",itr);
 }
 
 //point wise layer
@@ -2406,13 +2419,13 @@ void Layer11( void )
     //Convert each chhannel from input to im2col
     im2col_cpu(outputL10,CHANNELS_11,H_11,W_11,K_D_11,1,0,im2col11);
 
-    printf("Feature Map Dim H_11 %d \t W_11 %d \t K_D_11 %d\n",H_11,W_11,K_D_11);
-    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
-    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_11*K_D_11),(dG_h*dG_w));
+//    printf("Feature Map Dim H_11 %d \t W_11 %d \t K_D_11 %d\n",H_11,W_11,K_D_11);
+//    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+//    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_11*K_D_11),(dG_h*dG_w));
 
     filter11[0]=1;
 
-    printf("Running GEMM Layer 11 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_11*K_D_11*CHANNELS_11),(dG_h*dG_w),1,(K_D_11*K_D_11*CHANNELS_11)); 
+//    printf("Running GEMM Layer 11 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_11*K_D_11*CHANNELS_11),(dG_h*dG_w),1,(K_D_11*K_D_11*CHANNELS_11)); 
 
     //Call the kernel with the following matrix 
     //Create the input and output arrays in device memory for our calculation
@@ -2464,8 +2477,8 @@ void Layer11( void )
     kernelExecTimeNs = end-start;
 
 
-    printf("time in  %0.3f nanossec\n", kernelExecTimeNs);
-    printf("time in  %0.3f nanossec\n", TotalTime);
+    printf("Layer11 time %0.3f nanossec\n", kernelExecTimeNs);
+    ///printf("time in  %0.3f nanossec\n", TotalTime);
     //Retrieve result from device
     err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l11_out_p, output11, 0, NULL, NULL);
     clFinish(commands);
@@ -2476,9 +2489,9 @@ void Layer11( void )
         exit(1);
     }
 
-    printf("Matrix multiplication completed...\n"); 
+//    printf("Matrix multiplication completed...\n"); 
 
-    printf("PointWise Layer 11 done %d\n",itr);
+//    printf("PointWise Layer 11 done %d\n",itr);
 }
 
 //Layer 12 depthwise s2
@@ -2582,8 +2595,8 @@ void Layer12( void )
         }
         
     }
-    printf("time in %0.3f nanossec \n", kernelExecTimeNs);
-    printf("Depthwise Layer - 12 done %d\n",itr);
+    printf("Layer12 time %0.3f nanossec\n", kernelExecTimeNs);
+//    printf("Depthwise Layer - 12 done %d\n",itr);
 }
 
 //point wise layer
@@ -2594,13 +2607,13 @@ void Layer13( void )
     //Convert each chhannel from input to im2col
     im2col_cpu(outputL12,CHANNELS_13,H_13,W_13,K_D_13,1,0,im2col13);
 
-    printf("Feature Map Dim H_13 %d \t W_13 %d \t K_D_13 %d\n",H_13,W_13,K_D_13);
-    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
-    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_13*K_D_13),(dG_h*dG_w));
+//    printf("Feature Map Dim H_13 %d \t W_13 %d \t K_D_13 %d\n",H_13,W_13,K_D_13);
+//    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+//    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_13*K_D_13),(dG_h*dG_w));
 
     filter13[0]=1;
 
-    printf("Running GEMM Layer 13 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_13*K_D_13*CHANNELS_13),(dG_h*dG_w),1,(K_D_13*K_D_13*CHANNELS_13)); 
+//    printf("Running GEMM Layer 13 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_13*K_D_13*CHANNELS_13),(dG_h*dG_w),1,(K_D_13*K_D_13*CHANNELS_13)); 
 
     //Call the kernel with the following matrix 
     //Create the input and output arrays in device memory for our calculation
@@ -2652,8 +2665,8 @@ void Layer13( void )
     kernelExecTimeNs = end-start;
 
 
-    printf("time in  %0.3f nanossec\n", kernelExecTimeNs);
-    printf("time in  %0.3f nanossec\n", TotalTime);
+    printf("Layer13 time %0.3f nanossec\n", kernelExecTimeNs);
+    //printf("time in  %0.3f nanossec\n", TotalTime);
     //Retrieve result from device
     err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l13_out_p, outputL13, 0, NULL, NULL);
     clFinish(commands);
@@ -2664,9 +2677,9 @@ void Layer13( void )
         exit(1);
     }
 
-    printf("Matrix multiplication completed...\n"); 
+//    printf("Matrix multiplication completed...\n"); 
 
-    printf("PointWise Layer 13 done %d\n",itr);
+//    printf("PointWise Layer 13 done %d\n",itr);
 }
 //Layer 14 depthwise 
 void Layer14( void )
@@ -2769,8 +2782,8 @@ void Layer14( void )
         }
         
     }
-    printf("time in %0.3f nanossec \n", kernelExecTimeNs);
-    printf("Depthwise Layer - 14 done %d\n",itr);
+    printf("Layer14 time %0.3f nanossec\n", kernelExecTimeNs);
+//    printf("Depthwise Layer - 14 done %d\n",itr);
 }
 
 //point wise layer
@@ -2781,13 +2794,13 @@ void Layer15( void )
     //Convert each chhannel from input to im2col
     im2col_cpu(outputL14,CHANNELS_15,H_15,W_15,K_D_15,1,0,im2col15);
 
-    printf("Feature Map Dim H_15 %d \t W_15 %d \t K_D_15 %d\n",H_15,W_15,K_D_15);
-    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
-    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_15*K_D_15),(dG_h*dG_w));
+//    printf("Feature Map Dim H_15 %d \t W_15 %d \t K_D_15 %d\n",H_15,W_15,K_D_15);
+//    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+//    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_15*K_D_15),(dG_h*dG_w));
 
     filter15[0]=1;
 
-    printf("Running GEMM Layer15 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_15*K_D_15*CHANNELS_15),(dG_h*dG_w),1,(K_D_15*K_D_15*CHANNELS_15)); 
+//    printf("Running GEMM Layer15 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_15*K_D_15*CHANNELS_15),(dG_h*dG_w),1,(K_D_15*K_D_15*CHANNELS_15)); 
 
     //Call the kernel with the following matrix 
     //Create the input and output arrays in device memory for our calculation
@@ -2839,8 +2852,8 @@ void Layer15( void )
     kernelExecTimeNs = end-start;
 
 
-    printf("time in  %0.3f nanossec\n", kernelExecTimeNs);
-    printf("time in  %0.3f nanossec\n", TotalTime);
+    printf("Layer15 time %0.3f nanossec\n", kernelExecTimeNs);
+    //printf("time in  %0.3f nanossec\n", TotalTime);
     //Retrieve result from device
     err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l15_out_p, outputL15, 0, NULL, NULL);
     clFinish(commands);
@@ -2851,9 +2864,9 @@ void Layer15( void )
         exit(1);
     }
 
-    printf("Matrix multiplication completed...\n"); 
+//    printf("Matrix multiplication completed...\n"); 
 
-    printf("PointWise Layer 15 done %d\n",itr);
+//    printf("PointWise Layer 15 done %d\n",itr);
 }
 //Layer 16 depthwise 
 void Layer16( void )
@@ -2956,8 +2969,8 @@ void Layer16( void )
         }
         
     }
-    printf("time in %0.3f nanossec \n", kernelExecTimeNs);
-    printf("Depthwise Layer - 16 done %d\n",itr);
+    printf("Layer16 time %0.3f nanossec\n", kernelExecTimeNs);
+//    printf("Depthwise Layer - 16 done %d\n",itr);
 }
 
 //point wise layer
@@ -2968,13 +2981,13 @@ void Layer17( void )
     //Convert each chhannel from input to im2col
     im2col_cpu(outputL16,CHANNELS_17,H_17,W_17,K_D_17,1,0,im2col17);
 
-    printf("Feature Map Dim H_17 %d \t W_17 %d \t K_D_17 %d\n",H_17,W_17,K_D_17);
-    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
-    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_17*K_D_17),(dG_h*dG_w));
+//    printf("Feature Map Dim H_17 %d \t W_17 %d \t K_D_17 %d\n",H_17,W_17,K_D_17);
+//    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+//    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_17*K_D_17),(dG_h*dG_w));
 
     filter17[0]=1;
 
-    printf("Running GEMM Layer17 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_17*K_D_17*CHANNELS_17),(dG_h*dG_w),1,(K_D_17*K_D_17*CHANNELS_17)); 
+//    printf("Running GEMM Layer17 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_17*K_D_17*CHANNELS_17),(dG_h*dG_w),1,(K_D_17*K_D_17*CHANNELS_17)); 
 
     //Call the kernel with the following matrix 
     //Create the input and output arrays in device memory for our calculation
@@ -3026,8 +3039,8 @@ void Layer17( void )
     kernelExecTimeNs = end-start;
 
 
-    printf("time in  %0.3f nanossec\n", kernelExecTimeNs);
-    printf("time in  %0.3f nanossec\n", TotalTime);
+    printf("Layer17 time %0.3f nanossec\n", kernelExecTimeNs);
+    //printf("time in  %0.3f nanossec\n", TotalTime);
     //Retrieve result from device
     err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l17_out_p, outputL17, 0, NULL, NULL);
     clFinish(commands);
@@ -3038,9 +3051,9 @@ void Layer17( void )
         exit(1);
     }
 
-    printf("Matrix multiplication completed...\n"); 
+//    printf("Matrix multiplication completed...\n"); 
 
-    printf("PointWise Layer 17 done %d\n",itr);
+//    printf("PointWise Layer 17 done %d\n",itr);
 }
 
 //Layer 18 depthwise 
@@ -3144,8 +3157,8 @@ void Layer18( void )
         }
         
     }
-    printf("time in %0.3f nanossec \n", kernelExecTimeNs);
-    printf("Depthwise Layer - 18 done %d\n",itr);
+    printf("Layer18 time %0.3f nanossec\n", kernelExecTimeNs);
+//    printf("Depthwise Layer - 18 done %d\n",itr);
 }
 
 //point wise layer
@@ -3156,13 +3169,13 @@ void Layer19( void )
     //Convert each chhannel from input to im2col
     im2col_cpu(outputL18,CHANNELS_19,H_19,W_19,K_D_19,1,0,im2col19);
 
-    printf("Feature Map Dim H_19 %d \t W_19 %d \t K_D_19 %d\n",H_19,W_19,K_D_19);
-    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
-    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_19*K_D_19),(dG_h*dG_w));
+//    printf("Feature Map Dim H_19 %d \t W_19 %d \t K_D_19 %d\n",H_19,W_19,K_D_19);
+//    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+//    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_19*K_D_19),(dG_h*dG_w));
 
     filter19[0]=1;
 
-    printf("Running GEMM Layer19 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_19*K_D_19*CHANNELS_19),(dG_h*dG_w),1,(K_D_19*K_D_19*CHANNELS_19)); 
+//    printf("Running GEMM Layer19 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_19*K_D_19*CHANNELS_19),(dG_h*dG_w),1,(K_D_19*K_D_19*CHANNELS_19)); 
 
     //Call the kernel with the following matrix 
     //Create the input and output arrays in device memory for our calculation
@@ -3214,8 +3227,8 @@ void Layer19( void )
     kernelExecTimeNs = end-start;
 
 
-    printf("time in  %0.3f nanossec\n", kernelExecTimeNs);
-    printf("time in  %0.3f nanossec\n", TotalTime);
+    printf("Layer19 time %0.3f nanossec\n", kernelExecTimeNs);
+    //printf("time in  %0.3f nanossec\n", TotalTime);
     //Retrieve result from device
     err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l19_out_p, outputL19, 0, NULL, NULL);
     clFinish(commands);
@@ -3226,9 +3239,9 @@ void Layer19( void )
         exit(1);
     }
 
-    printf("Matrix multiplication completed...\n"); 
+//    printf("Matrix multiplication completed...\n"); 
 
-    printf("PointWise Layer 19 done %d\n",itr);
+//    printf("PointWise Layer 19 done %d\n",itr);
 }
 
 //Layer 20 depthwise 
@@ -3332,8 +3345,8 @@ void Layer20( void )
         }
         
     }
-    printf("time in %0.3f nanossec \n", kernelExecTimeNs);
-    printf("Depthwise Layer - 20 done %d\n",itr);
+    printf("Layer20 time %0.3f nanossec\n", kernelExecTimeNs);
+    //printf("Depthwise Layer - 20 done %d\n",itr);
 }
 
 
@@ -3345,13 +3358,13 @@ void Layer21( void )
     //Convert each chhannel from input to im2col
     im2col_cpu(outputL20,CHANNELS_21,H_21,W_21,K_D_21,1,0,im2col21);
 
-    printf("Feature Map Dim H_21 %d \t W_21 %d \t K_D_21 %d\n",H_21,W_21,K_D_21);
-    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
-    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_21*K_D_21),(dG_h*dG_w));
+//    printf("Feature Map Dim H_21 %d \t W_21 %d \t K_D_21 %d\n",H_21,W_21,K_D_21);
+//    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+//    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_21*K_D_21),(dG_h*dG_w));
 
     filter21[0]=1;
 
-    printf("Running GEMM Layer21 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_21*K_D_21*CHANNELS_21),(dG_h*dG_w),1,(K_D_21*K_D_21*CHANNELS_21)); 
+//    printf("Running GEMM Layer21 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_21*K_D_21*CHANNELS_21),(dG_h*dG_w),1,(K_D_21*K_D_21*CHANNELS_21)); 
 
     //Call the kernel with the following matrix 
     //Create the input and output arrays in device memory for our calculation
@@ -3403,8 +3416,8 @@ void Layer21( void )
     kernelExecTimeNs = end-start;
 
 
-    printf("time in  %0.3f nanossec\n", kernelExecTimeNs);
-    printf("time in  %0.3f nanossec\n", TotalTime);
+    printf("Layer21 time %0.3f nanossec\n", kernelExecTimeNs);
+    //printf("time in  %0.3f nanossec\n", TotalTime);
     //Retrieve result from device
     err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l21_out_p, outputL21, 0, NULL, NULL);
     clFinish(commands);
@@ -3415,9 +3428,9 @@ void Layer21( void )
         exit(1);
     }
 
-    printf("Matrix multiplication completed...\n"); 
+//    printf("Matrix multiplication completed...\n"); 
 
-    printf("PointWise Layer 21 done %d\n",itr);
+//    printf("PointWise Layer 21 done %d\n",itr);
 }
 
 //Layer 22 depthwise 
@@ -3521,8 +3534,8 @@ void Layer22( void )
         }
         
     }
-    printf("time in %0.3f nanossec \n", kernelExecTimeNs);
-    printf("Depthwise Layer - 22 done %d\n",itr);
+    printf("Layer22 time %0.3f nanossec\n", kernelExecTimeNs);
+    //printf("Depthwise Layer - 22 done %d\n",itr);
 }
 
 //point wise layer
@@ -3533,13 +3546,13 @@ void Layer23( void )
     //Convert each chhannel from input to im2col
     im2col_cpu(outputL22,CHANNELS_23,H_23,W_23,K_D_23,1,0,im2col23);
 
-    printf("Feature Map Dim H_23 %d \t W_23 %d \t K_D_23 %d\n",H_23,W_23,K_D_23);
-    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
-    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_23*K_D_23),(dG_h*dG_w));
+//    printf("Feature Map Dim H_23 %d \t W_23 %d \t K_D_23 %d\n",H_23,W_23,K_D_23);
+//    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+//    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_23*K_D_23),(dG_h*dG_w));
 
     filter23[0]=1;
 
-    printf("Running GEMM Layer23 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_23*K_D_23*CHANNELS_23),(dG_h*dG_w),1,(K_D_23*K_D_23*CHANNELS_23)); 
+//    printf("Running GEMM Layer23 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_23*K_D_23*CHANNELS_23),(dG_h*dG_w),1,(K_D_23*K_D_23*CHANNELS_23)); 
 
     //Call the kernel with the following matrix 
     //Create the input and output arrays in device memory for our calculation
@@ -3591,8 +3604,8 @@ void Layer23( void )
     kernelExecTimeNs = end-start;
 
 
-    printf("time in  %0.3f nanossec\n", kernelExecTimeNs);
-    printf("time in  %0.3f nanossec\n", TotalTime);
+    printf("Layer23 time %0.3f nanossec\n", kernelExecTimeNs);
+    //printf("time in  %0.3f nanossec\n", TotalTime);
     //Retrieve result from device
     err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l23_out_p, outputL23, 0, NULL, NULL);
     clFinish(commands);
@@ -3603,9 +3616,9 @@ void Layer23( void )
         exit(1);
     }
 
-    printf("Matrix multiplication completed...\n"); 
+//    printf("Matrix multiplication completed...\n"); 
 
-    printf("PointWise Layer 23 done %d\n",itr);
+//    printf("PointWise Layer 23 done %d\n",itr);
 }
 
 
@@ -3710,27 +3723,26 @@ void Layer24( void )
             outputL24[jf] = outputL24_eachFilter[i];
         }
     }
-    printf("time in %0.3f nanossec \n", kernelExecTimeNs);
-    printf("Depthwise Layer - 24 done %d\n",itr);
+    printf("Layer24 time %0.3f nanossec\n", kernelExecTimeNs);
+    //printf("Depthwise Layer - 24 done %d\n",itr);
 
 }
 
-    //Layer 25 Pointwise
-
-    void Layer25( void )
+//Layer 25 Pointwise
+void Layer25( void )
 {
     int i,j,jf=0,itr;
 
     //Convert each chhannel from input to im2col
     im2col_cpu(outputL24,CHANNELS_25,H_25,W_25,K_D_25,1,0,im2col25);
 
-    printf("Feature Map Dim H_25 %d \t W_25 %d \t K_D_25 %d\n",H_25,W_25,K_D_25);
-    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
-    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_25*K_D_25),(dG_h*dG_w));
+//    printf("Feature Map Dim H_25 %d \t W_25 %d \t K_D_25 %d\n",H_25,W_25,K_D_25);
+//    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+//    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_25*K_D_25),(dG_h*dG_w));
 
     filter25[0]=1;
 
-    printf("Running GEMM Layer25 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_25*K_D_25*CHANNELS_25),(dG_h*dG_w),1,(K_D_25*K_D_25*CHANNELS_25)); 
+//    printf("Running GEMM Layer25 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_25*K_D_25*CHANNELS_25),(dG_h*dG_w),1,(K_D_25*K_D_25*CHANNELS_25)); 
 
     //Call the kernel with the following matrix 
     //Create the input and output arrays in device memory for our calculation
@@ -3782,8 +3794,8 @@ void Layer24( void )
     kernelExecTimeNs = end-start;
 
 
-    printf("time in  %0.3f nanossec\n", kernelExecTimeNs);
-    printf("time in  %0.3f nanossec\n", TotalTime);
+    printf("Layer25 time %0.3f nanossec\n", kernelExecTimeNs);
+    //printf("time in  %0.3f nanossec\n", TotalTime);
     //Retrieve result from device
     err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l25_out_p, outputL25, 0, NULL, NULL);
     clFinish(commands);
@@ -3794,9 +3806,9 @@ void Layer24( void )
         exit(1);
     }
 
-    printf("Matrix multiplication completed...\n"); 
+//    printf("Matrix multiplication completed...\n"); 
 
-    printf("PointWise Layer 25 done %d\n",itr);
+//    printf("PointWise Layer 25 done %d\n",itr);
 }
 
 
@@ -3900,8 +3912,8 @@ void Layer24( void )
             outputL26[jf] = outputL26_eachFilter[i];
         }
     }
-    printf("time in %0.3f nanossec \n", kernelExecTimeNs);
-    printf("Depthwise Layer - 26 done %d\n",itr);
+    printf("Layer26 time %0.3f nanossec\n", kernelExecTimeNs);
+//    printf("Depthwise Layer - 26 done %d\n",itr);
 
 }
 
@@ -3914,13 +3926,13 @@ void Layer27( void )
     //Convert each chhannel from input to im2col
     im2col_cpu(outputL26,CHANNELS_27,H_27,W_27,K_D_27,1,0,im2col27);
 
-    printf("Feature Map Dim H_27 %d \t W_27 %d \t K_D_27 %d\n",H_27,W_27,K_D_27);
-    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
-    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_27*K_D_27),(dG_h*dG_w));
+//    printf("Feature Map Dim H_27 %d \t W_27 %d \t K_D_27 %d\n",H_27,W_27,K_D_27);
+//    printf("im2Col FeatureMap Dim H %d \t W %d \n",dG_h,dG_w);
+//    printf("im2Col Matrix Dim H %d \t W %d \n",(K_D_27*K_D_27),(dG_h*dG_w));
 
     filter27[0]=1;
 
-    printf("Running GEMM Layer27 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_27*K_D_27*CHANNELS_27),(dG_h*dG_w),1,(K_D_27*K_D_27*CHANNELS_27)); 
+//    printf("Running GEMM Layer27 Point (%dx%d) and Filter_Matrix (%dx%d) ...\n",(K_D_27*K_D_27*CHANNELS_27),(dG_h*dG_w),1,(K_D_27*K_D_27*CHANNELS_27)); 
 
     //Call the kernel with the following matrix 
     //Create the input and output arrays in device memory for our calculation
@@ -3972,8 +3984,8 @@ void Layer27( void )
     kernelExecTimeNs = end-start;
 
 
-    printf("time in  %0.3f nanossec\n", kernelExecTimeNs);
-    printf("time in  %0.3f nanossec\n", TotalTime);
+    printf("Layer27 time %0.3f nanossec\n", kernelExecTimeNs);
+    printf("Total time in  %0.3f nanossec\n", TotalTime);
     //Retrieve result from device
     err = clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, mem_size_l27_out_p, outputL27, 0, NULL, NULL);
     clFinish(commands);
@@ -3984,10 +3996,10 @@ void Layer27( void )
         exit(1);
     }
 
-    printf("Matrix multiplication completed...\n"); 
+//    printf("Matrix multiplication completed...\n"); 
 
-    printf("PointWise Layer 27 done %d\n",itr);
-    printf("Final op size %d\n",size_l27_out_p);
+//    printf("PointWise Layer 27 done %d\n",itr);
+//    printf("Final op size %d\n",size_l27_out_p);
     /*for(i=0;i<7;i++)
     {
         for(j=0;j<7;j++)
@@ -4037,4 +4049,21 @@ void Layer29( void )
         }
     }
     printf("Layer 29 Fully Connected Done\n");
+}
+
+//Layer 30 Fully Connected
+void Layer30( void )
+{
+    int expo[1000],sum;
+    int i,j,jf=0,itr;
+    for(i=0;i<CLASSES_SOFTMAX;i++)
+    {
+        expo[i] = exp(outputL29[i]);
+        sum += expo[i];
+    }
+    for(i=0;i<CLASSES_SOFTMAX;i++)
+    {
+        outputL30[i] = expo[i]/sum;
+    }
+    printf("Layer 30 softmax Done\n");
 }
